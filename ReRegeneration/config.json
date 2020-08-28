@@ -1,0 +1,9 @@
+{
+  "healthRegenPerSecond": 0.1,
+  "staminaRegenPerSecond": 0.5,
+  "healthIdleSeconds": 30,
+  "staminaIdleSeconds": 15,
+  "regenHealthWhileRunning": false,
+  "regenStaminaWhileRunning": false,
+  "debug": false
+}
