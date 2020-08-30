@@ -89,6 +89,7 @@ namespace ReRegeneration
         double timeElapsed;                     //Time since last check.
         double lastLogTime;                     //Time since last log event.
         double lastTickTime;                    //The time at the last tick processed.
+        double frozenTime;                      //Time spent in menus, cutscenes, etc.  
         bool movePenalty;                       //Whether movement will block regeneration.
 
         bool percentageMode;                    //Whether we're using this mode of operation.
@@ -120,6 +121,7 @@ namespace ReRegeneration
             timeElapsed = 0.0;
             lastTickTime = 0.0;
             lastLogTime = 0.0;
+            frozenTime = 0.0;
 
             movePenalty = false;
 
@@ -268,7 +270,7 @@ namespace ReRegeneration
         //Timed logging.
         void LogIt(string msg, bool doIt = true, LogLevel lvl = LogLevel.Debug)
         {
-            if (doIt)
+            if (doIt && msg != "")
             {
                 Monitor.Log(msg, lvl);
                 lastLogTime = Game1.currentGameTime.TotalGameTime.TotalSeconds;
@@ -335,15 +337,26 @@ namespace ReRegeneration
 
         private void OnUpdate(object sender, UpdateTickedEventArgs e)
         {
-            //If game is running, and time can pass (i.e., are not in an event/cutscene/menu/festival), and this is a quarter-second update...
-            if (e.IsMultipleOf(15) && Game1.hasLoadedGame && Game1.shouldTimePass())
+            //All of this requires that the game be loaded and this be a quarter-second tick.
+            if (!Game1.hasLoadedGame || !e.IsMultipleOf(15)) return;
+
+            //Make sure we know exactly how much time has elapsed
+            currentTime = Game1.currentGameTime.TotalGameTime.TotalSeconds;
+            timeElapsed = currentTime - lastTickTime;   //Every amount of regen multiplied by this.
+            lastTickTime = currentTime;
+
+            //Catches and attempts to deal with menus, cutscenes, etc. reducing the cooldown.
+            if (!Game1.shouldTimePass()) frozenTime += timeElapsed;
+            //If time can pass (i.e., are not in an event/cutscene/menu/festival)...
+            else
             {
                 SetRegenVals();
 
-                //Make sure we know exactly how much time has elapsed
-                currentTime = Game1.currentGameTime.TotalGameTime.TotalSeconds;
-                timeElapsed = currentTime - lastTickTime;   //Every amount of regen multiplied by this.
-                lastTickTime = currentTime;
+                if (frozenTime > 0.0)
+                {
+                    timeElapsed = timeElapsed > frozenTime ? timeElapsed - frozenTime : 0.0;
+                    frozenTime = 0.0;
+                }
 
                 //Do this once.
                 LogIt(StatReport(false, true, false, false), ((currentTime < 30.0) && lastLogTime == 0.0));
@@ -368,6 +381,8 @@ namespace ReRegeneration
                 //Decrement how long we've been on stamina cooldown otherwise.
                 if (myPlayer.stamina < lastStamina) { staminaCooldown = myConfig.staminaIdleSeconds * stamDelayMult; }
                 else if (staminaCooldown > 0) { staminaCooldown -= regenProgress; }
+
+                LogIt(String.Format("Timings:\nTime elpased this check = {0}\nProgress to ending cooldown = {1}\nCooldown time left = {2}", Math.Round(timeElapsed, 2), Math.Round(regenProgress, 2), Math.Round(staminaCooldown, 2)));
 
                 //Check for player injury. If player has been injured since last tick, reset the cooldown.
                 //Decrement how long we've been on health cooldown otherwise.
