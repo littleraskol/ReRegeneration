@@ -1,118 +1,174 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using StardewValley;
+using StardewValley.Tools;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using Microsoft.Xna.Framework;
-
 
 namespace ReRegeneration
 {
 
     class ModConfig
     {
-        public Double healthRegenPerSecond { get; set; }
-        public Int32 healthIdleSeconds { get; set; }
-        public Double regenHealthWhileRunningRate { get; set; }
-
         public Double staminaRegenPerSecond { get; set; }
         public Int32 staminaIdleSeconds { get; set; }
         public Double regenStaminaWhileRunningRate { get; set; }
+        public Double maxStaminaRatioToRegen { get; set; }
+        public Double scaleStaminaRegenRateTo { get; set; }
+        public Double scaleStaminaRegenDelayTo { get; set; }
+
+        public Double healthRegenPerSecond { get; set; }
+        public Int32 healthIdleSeconds { get; set; }
+        public Double regenHealthWhileRunningRate { get; set; }
+        public Double maxHealthRatioToRegen { get; set; }
+        public Double scaleHealthRegenRateTo { get; set; }
+        public Double scaleHealthRegenDelayTo { get; set; }
 
         public Boolean percentageMode { get; set; }
+        public Double regenWhileActiveRate { get; set; }
+        public Double endExhaustionAt { get; set; }
+        public Double shortenDelayWhenStillBy { get; set; }
+        public Double lengthenDelayWhenRunningBy { get; set; }
+
         public Boolean verboseMode { get; set; }
 
 
         public ModConfig()
         {
-            this.healthRegenPerSecond = 0.1;
-            this.healthIdleSeconds = 15;
-            this.regenHealthWhileRunningRate = 0.0;
-
             this.staminaRegenPerSecond = 1.0;
             this.staminaIdleSeconds = 10;
             this.regenStaminaWhileRunningRate = 0.25;
+            this.maxStaminaRatioToRegen = 0.8;
+            this.scaleStaminaRegenRateTo = 0.5;
+            this.scaleStaminaRegenDelayTo = 0.5;
+
+            this.healthRegenPerSecond = 0.1;
+            this.healthIdleSeconds = 15;
+            this.regenHealthWhileRunningRate = 0.0;
+            this.maxHealthRatioToRegen = 0.8;
+            this.scaleHealthRegenRateTo = 0.75;
+            this.scaleHealthRegenDelayTo = 0.75;
 
             this.percentageMode = false;
+            this.regenWhileActiveRate = 0.8;
+            this.endExhaustionAt = 0.9;
+            this.shortenDelayWhenStillBy = 0.5;
+            this.lengthenDelayWhenRunningBy = 0.5;
+
             this.verboseMode = false;
         }
     }
 
-
     class ReRegenerator : Mod
     {
-        //Health values
-        double healthRegenInterval;             //How often to add health, needed due to weird math constraints...
-        int lastHealth;                         //Last recorded player health value.
-        int lastMaxHealth;                      //Last recorded max health value.
-        double healthAccum;                     //Accumulated health regenerated while running.
-        double healthCooldown;                  //How long to wait before beginning health regen.
-        double healthRunRate;                   //Running rate
-
         //Stamina values
         double stamRegenVal;                    //How much stamina to regen
         double lastStamina;                     //Last recorded player stamina value.
-        double lastMaxStamina;                  //Last recorded max stamina value.
+        //double lastMaxStamina;                  //Last recorded max stamina value.
         double staminaCooldown;                 //How long to wait before beginning stamina regen.
         double stamRunRate;                     //Running rate.
+        double maxStamRatio;                    //Percent of max stam to regen to.
+        float maxStamRegenAmount;               //Actual max stamina value to regen.
+        double stamRegenMult;                   //Used for scaling regen.
+        double stamDelayMult;                   //Used for scaling idle delay.
+
+        //Health values
+        double healthRegenVal;                  //How often to add health, needed due to weird math constraints...
+        int lastHealth;                         //Last recorded player health value.
+        //int lastMaxHealth;                      //Last recorded max health value.
+        double healthAccum;                     //Accumulated health regenerated while running.
+        double healthCooldown;                  //How long to wait before beginning health regen.
+        double healthRunRate;                   //Running rate.
+        double maxHealthRatio;                  //Percent of max health to regen to.
+        int maxHealthRegenAmount;               //Actual max health value to regen.
+        double healthRegenMult;                 //Used for scaling regen.
+        double healthDelayMult;                 //Used for scaling idle delay.
 
         //Control values
         double currentTime;                     //The... current time. (In seconds?)
         double timeElapsed;                     //Time since last check.
         double lastLogTime;                     //Time since last log event.
         double lastTickTime;                    //The time at the last tick processed.
-        bool moveBlocked;                       //Whether movement will block regeneration.
-        bool percentageMode;                    //Whether we're using this mode of operation.
-        bool verbose;                           //Whether to log regular diagnostics
+        bool movePenalty;                       //Whether movement will block regeneration.
 
-        Farmer Player;                          //Our player.
+        bool percentageMode;                    //Whether we're using this mode of operation.
+        double activeRegenMult;                 //Rate limiter while fishing, riding horse, etc.
+        double endExhaustion;                   //For the exhuastion status end option.
+        double stillnessDelayBonus;             //Staying still = shorter idle delay.
+        double runningDelayMalus;               //Running = longer idle delay.
+
+        bool verbose;                           //Whether to log regular diagnostics
+        
+        Farmer myPlayer;                        //Our player.
         ModConfig myConfig;                     //Config data.
 
         public override void Entry(IModHelper helper)
         {
             myConfig = helper.ReadConfig<ModConfig>();
 
-            //What mode
-            percentageMode = myConfig.percentageMode;
+            //Starting values at extremes which prevent unexpected behavior.
+            lastStamina = 9999;
+            //lastMaxStamina = 0.0;
+            staminaCooldown = 0;
 
-            //Verbosity?
-            verbose = myConfig.verboseMode;
-
-            //Running rates
-            healthRunRate = myConfig.regenHealthWhileRunningRate;
-            stamRunRate = myConfig.regenStaminaWhileRunningRate;
-
-            //Max running rate can't be higher than base.
-            if (healthRunRate > 1.0) { healthRunRate = 1.0; }
-            if (stamRunRate > 1.0) { stamRunRate = 1.0; }
-
-            //Starting values at extremes which prevent unexpected behavior. (Why not just 0...?)
             lastHealth = 9999;
-            lastMaxHealth = 0;
+            //lastMaxHealth = 0;
             healthCooldown = 0;
             healthAccum = 0.0;
-
-            lastStamina = 9999;
-            lastMaxStamina = 0.0;
-            staminaCooldown = 0;
 
             currentTime = 0.0;
             timeElapsed = 0.0;
             lastTickTime = 0.0;
             lastLogTime = 0.0;
 
-            //Regen values
-            SetRegenVals();
+            movePenalty = false;
 
-            moveBlocked = false;
-
-            helper.Events.GameLoop.UpdateTicked += OnUpdate;
+            helper.Events.GameLoop.SaveLoaded += StartupTasks;
+            helper.Events.GameLoop.DayStarted += DailyUpdate;
+            helper.Events.GameLoop.UpdateTicked += OnUpdate;    //Set to quarter-second intervals.
 
             Monitor.Log("ReRegeneration => Initialized", LogLevel.Info);
 
+        }
+
+        private void StartupTasks(object sender, SaveLoadedEventArgs e)
+        {
+            myPlayer = Game1.player;
+
+            //Using percentage mode?
+            percentageMode = myConfig.percentageMode;
+
+            //Verbosity?
+            verbose = myConfig.verboseMode;
+
+            //Running rates
+            stamRunRate = Math.Max(0.0, Math.Min(1.0, myConfig.regenStaminaWhileRunningRate));
+            healthRunRate = Math.Max(0.0, Math.Min(1.0, myConfig.regenHealthWhileRunningRate));
+
+            //Max regen ratios
+            maxStamRatio = Math.Max(0.01, Math.Min(1.0, myConfig.maxStaminaRatioToRegen));
+            maxHealthRatio = Math.Max(0.01, Math.Min(1.0, myConfig.maxHealthRatioToRegen));
+
+            //Active regen ratio
+            activeRegenMult = Math.Max(0.0, Math.Min(1.0, myConfig.regenWhileActiveRate));
+
+            //End exhaustion at?
+            endExhaustion = Math.Max(0.0, Math.Min(1.0, myConfig.endExhaustionAt));
+
+            //Delay bonuses and penalties
+            stillnessDelayBonus = Math.Max(0.0, myConfig.shortenDelayWhenStillBy);
+            runningDelayMalus = Math.Max(0.0, Math.Min(1.0, myConfig.lengthenDelayWhenRunningBy));
+        }
+
+        private void DailyUpdate(object sender, DayStartedEventArgs e)
+        {
+            //Reset these values
+            staminaCooldown = 0;
+            healthCooldown = 0;
+            healthAccum = 0.0;
+
+            //Every day, initialize relevant values. This happens very frequently but I want to get some baseline values.
+            SetRegenVals();
         }
 
         /* Figure out what the regen values are. May be called frequently.
@@ -124,53 +180,88 @@ namespace ReRegeneration
         */
         void SetRegenVals()
         {
+            if (!Game1.hasLoadedGame) return;   //Not sure this can ever happen but eh
+
+            //Maximum values that passive regen can reach
+            maxStamRegenAmount = (float)Math.Round((double)myPlayer.maxStamina * maxStamRatio);
+            maxHealthRegenAmount = (int)Math.Round((double)myPlayer.maxHealth * maxHealthRatio);
+
+            float stamRatioToMax = Math.Min(myPlayer.stamina, this.maxStamRegenAmount) / this.maxStamRegenAmount;
+            float healthRatioToMax = Math.Min(myPlayer.health, this.maxHealthRegenAmount) / this.maxHealthRegenAmount;
+
+            //Using as a holding value until modified
+            stamRegenMult = Math.Max(0.0, Math.Min(1.0, myConfig.scaleStaminaRegenRateTo));
+            healthRegenMult = Math.Max(0.0, Math.Min(1.0, myConfig.scaleHealthRegenRateTo));
+
+            //Scaling regen values
+            stamRegenMult = stamRegenMult > 0.0 ? stamRegenMult + (stamRatioToMax * (1.0 - stamRegenMult)) : 1.0;
+            healthRegenMult = healthRegenMult > 0.0 ? healthRegenMult + (healthRatioToMax * (1.0 - healthRegenMult)) : 1.0;
+
+            //Using as a holding value until modified
+            stamDelayMult = Math.Max(0.0, myConfig.scaleStaminaRegenDelayTo);
+            healthDelayMult = Math.Max(0.0, myConfig.scaleHealthRegenDelayTo);
+
+            //Scaling idle delay
+            stamDelayMult = 1.0 + ((1.0 - stamRatioToMax) * stamDelayMult);
+            healthDelayMult = 1.0 + ((1.0 - healthRatioToMax) * healthDelayMult);
+
+            //Initial default values, will be modified for percentage mode if needed.
+            stamRegenVal = Math.Max(0.0, myConfig.staminaRegenPerSecond);
+            healthRegenVal = Math.Max(0.0, myConfig.healthRegenPerSecond);
+
             //What to do if calculating by percentages.
-            if (percentageMode && Game1.hasLoadedGame)
+            if (percentageMode)
             {
-                Player = Game1.player;
+                stamRegenVal *= (0.01 * maxStamRegenAmount);
+                healthRegenVal *= (0.01 * maxHealthRegenAmount);
 
-                int maxHealthNow = Player.maxHealth;
-                int maxStamNow = Player.maxStamina;
-
-                //Only (re)calculate if max health changed or first time.
-                if (lastMaxHealth < maxHealthNow)
-                {
-                    healthRegenInterval = myConfig.healthRegenPerSecond;
-
-                    //Turn into a percentage
-                    healthRegenInterval *= 0.01;
-
-                    //Calculate according to current max health
-                    healthRegenInterval *= maxHealthNow;
-
-                    //Turn into a length of time in seconds.
-                    healthRegenInterval = 1 / healthRegenInterval;
-
-                    //Record the last seen max health
-                    lastMaxHealth = maxHealthNow;
-                }
+                /*
+                int maxStamNow = myPlayer.maxStamina;
+                int maxHealthNow = myPlayer.maxHealth;
 
                 //Only (re)calculate if max stamina changed or first time.
                 if (lastMaxStamina < maxStamNow)
                 {
-                    stamRegenVal = myConfig.staminaRegenPerSecond;
+                    //stamRegenVal = myConfig.staminaRegenPerSecond;
 
                     //Turn into a percentage
                     stamRegenVal *= 0.01;
 
-                    //Calculate according to current max stamina
-                    stamRegenVal *= maxStamNow;
+                    //Calculate according to current max stamina passive regen ceiling, which scales w/ actual max stamina
+                    stamRegenVal *= maxStamRegenAmount;
 
                     //Record the last seen max stamina
                     lastMaxStamina = maxStamNow;
                 }
 
-                return;
+                //Only (re)calculate if max health changed or first time.
+                if (lastMaxHealth < maxHealthNow)
+                {
+                    //healthRegenVal = myConfig.healthRegenPerSecond;
+
+                    //Turn into a percentage
+                    healthRegenVal *= 0.01;
+
+                    //Calculate according to current max health passive regen ceiling, which scales w/ actual max health
+                    healthRegenVal *= maxHealthRegenAmount;
+
+                    //Turn into a length of time in seconds.
+                    //if (healthRegenVal != 0) healthRegenVal = 1 / healthRegenVal;
+
+                    //Record the last seen max health
+                    lastMaxHealth = maxHealthNow;
+                }
+                */
             }
 
-            healthRegenInterval = 1 / myConfig.healthRegenPerSecond;
-
-            stamRegenVal = myConfig.staminaRegenPerSecond;
+            //else
+            //{
+            //    //if (myConfig.healthRegenPerSecond != 0) healthRegenVal = 1 / myConfig.healthRegenPerSecond;
+            //    //else healthRegenVal = 0;
+            //    healthRegenVal = myConfig.healthRegenPerSecond;
+            //
+            //    stamRegenVal = myConfig.staminaRegenPerSecond;
+            //}
 
         }
 
@@ -192,28 +283,28 @@ namespace ReRegeneration
 
             string retStr = String.Format("\n\n========= ReRegenerator Status after {0} seconds ==========", Math.Round(Game1.currentGameTime.TotalGameTime.TotalSeconds));
 
-            Player = Game1.player;
+            myPlayer = Game1.player;
 
             if (doAll || doMod)
             {
-                retStr += String.Format("\n\n-- Mod Status --\n*Stam recovery rate: {0}\n*While running: {1}\n*Health recovery interval: {2}\n*While running: {3}\n*Percent mode: {4}",
-                    stamRegenVal, stamRunRate, healthRegenInterval, healthRunRate, percentageMode);
+                retStr += String.Format("\n\n-- Mod Status --\n*Stam recovery rate: {0}\n*While running: {1}\n*Health recovery rate: {2}\n*While running: {3}\n*Percent mode: {4}",
+                    stamRegenVal, stamRunRate, healthRegenVal, healthRunRate, percentageMode);
             }
 
             if (doAll || doStam)
             {
-                retStr += String.Format("\n\n-- Stamina Status --\n*Lost stamina: {0}\n*Cooldown time: {1}", (Player.maxStamina - Player.stamina), Math.Round(staminaCooldown));
+                retStr += String.Format("\n\n-- Stamina Status --\n*Lost stamina: {0}\n*Cooldown time: {1}", (myPlayer.maxStamina - myPlayer.stamina), Math.Round(staminaCooldown));
             }
 
             if (doAll || doHealth)
             {
-                retStr += String.Format("\n\n-- Health Status --\n*Lost Health: {0}\n*Cooldown time: {1}\n*Accumulator: {2}", (Player.maxHealth - Player.health), Math.Round(healthCooldown), healthAccum);
+                retStr += String.Format("\n\n-- Health Status --\n*Lost Health: {0}\n*Cooldown time: {1}\n*Accumulator: {2}", (myPlayer.maxHealth - myPlayer.health), Math.Round(healthCooldown), healthAccum);
             }
 
             //On mon-mod updates, give player stats.
             if (!doMod)
             {
-                retStr += String.Format("\n\n-- Player Status --\n*Is running: {0}\n*Moved last tick: {1}\n*On horseback: {2}", Player.running, Player.movedDuringLastTick(), Player.isRidingHorse());
+                retStr += String.Format("\n\n-- myPlayer Status --\n*Is running: {0}\n*Moved last tick: {1}\n*On horseback: {2}", myPlayer.running, myPlayer.movedDuringLastTick(), myPlayer.isRidingHorse());
             }
 
             retStr += "\n\n========== ReRegenerator Status Report Complete ==========\n\n";
@@ -221,16 +312,37 @@ namespace ReRegeneration
             return retStr;
         }
 
-        private void OnUpdate(object sender, EventArgs e)
+        /* Determine whether movement status will block normal regeneration: If player is... 
+         * 1. running, and
+         * 2. has moved recently, and
+         * 3. is not on horseback, then
+         * movement blocks normal regen and the running rate prevails.
+        */
+        private bool HasMovePenalty(Farmer f)
         {
-            Player = Game1.player;
+            return (f.running && f.movedDuringLastTick() && !f.isRidingHorse());
+        }
 
-            //If game is running, and time can pass (i.e., are not in an event/cutscene/menu/festival)
-            if (Game1.hasLoadedGame && Game1.shouldTimePass())
+        /* Determine whether "action" penalty applies: If player is... 
+         * 1. fishing, or
+         * 2. riding a horse, then
+         * regen penalty to ongoing action applies.
+        */
+        private bool HasActPenalty(Farmer f)
+        {
+            return (f.usingTool && f.CurrentTool is FishingRod rod && (rod.isFishing || rod.isCasting || rod.isReeling || rod.isTimingCast)) || (f.isRidingHorse() && f.movedDuringLastTick());
+        }
+
+        private void OnUpdate(object sender, UpdateTickedEventArgs e)
+        {
+            //If game is running, and time can pass (i.e., are not in an event/cutscene/menu/festival), and this is a quarter-second update...
+            if (e.IsMultipleOf(15) && Game1.hasLoadedGame && Game1.shouldTimePass())
             {
-                //Make sure we know exactly how much time has elapsed (?)
+                SetRegenVals();
+
+                //Make sure we know exactly how much time has elapsed
                 currentTime = Game1.currentGameTime.TotalGameTime.TotalSeconds;
-                timeElapsed = currentTime - lastTickTime;
+                timeElapsed = currentTime - lastTickTime;   //Every amount of regen multiplied by this.
                 lastTickTime = currentTime;
 
                 //Do this once.
@@ -239,67 +351,45 @@ namespace ReRegeneration
                 //Every 15 secs report on all.
                 LogIt(StatReport(true, false, false, false), ((currentTime - lastLogTime) >= 15));
 
-                //Check for player injury. If player has been injured since last tick, reset the cooldown.
-                //Decrement how long we've been on health cooldown otherwise.
-                if (Player.health < lastHealth) { healthCooldown = myConfig.healthIdleSeconds; }
-                else if (healthCooldown > 0) { healthCooldown -= timeElapsed; }
+                double regenProgress;   //Will be set to timeElapsed w/ modifiers
+
+                movePenalty = HasMovePenalty(myPlayer);
+
+                /* Determine how much progress made towards ending cooldown.
+                 * 1. If running and there is a penalty, apply it to elapsed time.
+                 * 2. Otherwise, if staying still and there is a bonus, apply it to elapsed time.
+                 * 3. Otherwise, elapsed time is progress.
+                 */
+                if (movePenalty && (runningDelayMalus > 0.0)) regenProgress = timeElapsed * runningDelayMalus;
+                else if (!myPlayer.movedDuringLastTick() && (stillnessDelayBonus > 0.0)) regenProgress = timeElapsed * (1.0 + stillnessDelayBonus);
+                else regenProgress = timeElapsed;
 
                 //Check for player exertion. If player has used stamina since last tick, reset the cooldown.
                 //Decrement how long we've been on stamina cooldown otherwise.
-                if (Player.stamina < lastStamina) { staminaCooldown = myConfig.staminaIdleSeconds; }
-                else if (staminaCooldown > 0) { staminaCooldown -= timeElapsed; }
+                if (myPlayer.stamina < lastStamina) { staminaCooldown = myConfig.staminaIdleSeconds * stamDelayMult; }
+                else if (staminaCooldown > 0) { staminaCooldown -= regenProgress; }
 
-                /* Determine whether movement status will block normal regeneration: If player is... 
-                 * 1. running, and
-                 * 2. has moved recently, and
-                 * 3. is not on horseback, then
-                 * movement blocks normal regen and the running rate prevails. (If the running rate is 0, there is no regeneration.)
-                */
-                if (Player.running && Player.movedDuringLastTick() && !Player.isRidingHorse()) { moveBlocked = true; }
-                else { moveBlocked = false; }
+                //Check for player injury. If player has been injured since last tick, reset the cooldown.
+                //Decrement how long we've been on health cooldown otherwise.
+                if (myPlayer.health < lastHealth) { healthCooldown = myConfig.healthIdleSeconds * healthDelayMult; }
+                else if (healthCooldown > 0) { healthCooldown -= regenProgress; }
 
-                /*
-                 * Process health regeneration. Here are the criteria:
-                 * -Must have some health regen value.
-                 * -Must have less than max health.
-                 * -The health cooldown must be over.
-                */
-                if (healthRegenInterval > 0 && Player.health < Player.maxHealth && healthCooldown <= 0)
+                //Start building the regen modifier.
+                double stamMult = stamRegenMult;
+                double healMult = healthRegenMult;
+
+                //If "active" reduce by specified amount.
+                if (HasActPenalty(myPlayer))
                 {
-                    //Only update as needed.
-                    SetRegenVals();
+                    stamMult *= activeRegenMult;
+                    healMult *= activeRegenMult;
+                }
 
-                    /* 
-                     * Basically, we need to try to restore 1 health every interval, but we absolutely need a round number. 
-                     * So we "accumulate" fractional health each interval while running. (If not running, we accumulate 1 which gets applied ASAP.)
-                     * In this case, the fraction is not applied to the regen amount so much as accumulated per (extended) interval.
-                     * This might lead to some oddities where the player runs, stops running, and then later starts again. But eh.
-                    */
-                    if (moveBlocked) { healthAccum += healthRunRate; }
-                    else { healthAccum += 1; }
-
-                    //If we've accumulated 1 or more health, apply it and reduce the accumulation accordingly.
-                    //Note: I think it's vaguely theoretically possible that healthAccum could go above 2, and I am not sure how well this code would handle that. Probably fine...
-                    if (healthAccum >= 1)
-                    {
-                        Player.health += 1;
-                        healthAccum -= 1.0;
-                    }
-                    //If we have achieved a round positive number accumulated, apply it and reset the accumulation.
-                    //This probably shouldn't ever really happen because of the above, but it's a fallback just in case...
-                    else if (healthAccum > 0 && healthAccum % 1 == 0)
-                    {
-                        Player.health += (int)healthAccum;
-                        healthAccum = 0.0;
-                    }
-
-                    //Final sanity check
-                    if (Player.health > Player.maxHealth) { Player.health = Player.maxHealth; }
-
-                    //Every second give health/stam update.
-                    LogIt(StatReport(false, false, true, true), ((currentTime - lastLogTime) >= 1));
-
-                    healthCooldown = healthRegenInterval;
+                //If running, reduce by specified amount.
+                if (movePenalty)
+                {
+                    stamMult *= stamRunRate;
+                    healMult *= healthRunRate;
                 }
 
                 /*
@@ -308,28 +398,65 @@ namespace ReRegeneration
                  * -Must have less than max stamina.
                  * -The stamina cooldown must be over.
                 */
-                if (stamRegenVal > 0 && Player.stamina < Player.maxStamina && staminaCooldown <= 0)
+                if (stamRegenVal > 0 && myPlayer.stamina < maxStamRegenAmount && staminaCooldown <= 0)
                 {
-                    //Only update as needed.
-                    SetRegenVals();
-
-                    //Here, we can actually add fractional increments.
-                    //Implicitly, the math works out such that if you don't want to regen while running, the amount regenerated will be 0 while running.
-                    if (moveBlocked) { Player.stamina += (float)(stamRegenVal * stamRunRate); }
-                    else { Player.stamina += (float)stamRegenVal; }
+                    //Per-sec val * multiplier * fractions of 1 sec passed
+                    myPlayer.stamina += (float)(stamRegenVal * stamMult * timeElapsed);
 
                     //Final sanity check
-                    if (Player.stamina > Player.maxStamina) { Player.stamina = Player.maxStamina; }
+                    if (myPlayer.stamina > maxStamRegenAmount) { myPlayer.stamina = maxStamRegenAmount; }
 
-                    //Every second give health/stam update.
-                    LogIt(StatReport(false, false, true, true), ((currentTime - lastLogTime) >= 1));
-
-                    staminaCooldown = 1;
+                    //staminaCooldown = 1.0;
                 }
 
+                /*
+                 * Process health regeneration. Here are the criteria:
+                 * -Must have some health regen value.
+                 * -Must have less than max health.
+                 * -The health cooldown must be over.
+                */
+                if (healthRegenVal > 0 && myPlayer.health < maxHealthRegenAmount && healthCooldown <= 0)
+                {
+                    /* 
+                     * Basically, we want to try to restore health every interval, but we absolutely need a round number
+                     * because player health is an integer, not a float. So we "accumulate" fractional health each interval 
+                     * (only actually fractional under some circumstances). In this case, the fraction is not applied to
+                     * the regen amount so much as accumulated per interval.
+                    */
+                    healthAccum += (healthRegenVal * healMult * timeElapsed); //Per-sec val * multiplier * fractions of 1 sec passed
+
+                    //If we've accumulated 1 or more health, apply the whole number value and recalc the accumulation accordingly.
+                    if (healthAccum >= 1)
+                    {
+                        double rmndr = healthAccum % 1;     //Capture fractional value
+                        healthAccum -= rmndr;               //Reduce to whole number
+                        myPlayer.health += (int)healthAccum;  //Apply whole number value
+                        healthAccum = rmndr;                //Accumulate remainder
+                    }
+
+                    //If we have achieved a round positive number accumulated, apply it and reset the accumulation.
+                    //This probably shouldn't ever really happen because of the above, but it's a fallback just in case...
+                    //else if (healthAccum > 0 && healthAccum % 1 == 0)
+                    //{
+                    //    myPlayer.health += (int)healthAccum;
+                    //    healthAccum = 0.0;
+                    //}
+
+                    //Final sanity check
+                    if (myPlayer.health > maxHealthRegenAmount) { myPlayer.health = maxHealthRegenAmount; }
+
+                    //healthCooldown = 1.0;
+                }
+
+                //Determine whether to end exhausted status.
+                if (myPlayer.exhausted && endExhaustion > 0.0 && (myPlayer.stamina / maxStamRegenAmount) > endExhaustion) myPlayer.exhausted.Value = false;
+
                 // Updated stored health/stamina values.
-                lastHealth = Player.health;
-                lastStamina = Player.stamina;
+                lastHealth = myPlayer.health;
+                lastStamina = myPlayer.stamina;
+
+                //Every second give health/stam update.
+                if (e.IsMultipleOf(60)) LogIt(StatReport(false, false, true, true), ((currentTime - lastLogTime) >= 1));
             }
         }
     }
