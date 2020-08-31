@@ -13,6 +13,7 @@
   "scaleHealthRegenDelayTo": 0.75,
   "percentageMode": false,
   "regenWhileActiveRate": 0.8,
+  "exhuastionPenalty": 0.25,
   "endExhaustionAt": 0.9,
   "shortenDelayWhenStillBy": 0.5,
   "lengthenDelayWhenRunningBy": 0.5

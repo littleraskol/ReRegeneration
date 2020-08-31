@@ -42,6 +42,8 @@ percentageMode: Whether the "RegenPerSecond" values will be interpreted as perce
 
 regenWhileActiveRate: A 0 to 1 fractional value to multiply regen rates by while fishing or riding a horse. Default = 0.8, meaning 20% less regeneration. Set to 1 to ignore this feature. Set to 0 to turn regeneration off during these activities.
 
+exhuastionPenalty: A 0 to 1 fractional value by which the amount of regeneration is decrease and the duration of the idle delay is increased while the player is exhausted. At the default value of 0.25, regen amount is reduced by 25% and the delay time is increased by 25% while the player is exhausted. Set to 0 to turn this feature off. Note that when set to 1, this value will be treated as 0.99 for the purposes of reducing regen rate.
+
 endExhaustionAt: A 0 to 1 fractional value specifying when to end the "exhaustion" effect, such that it will end when player reaches the defined portion of max stamina. The default value of 0.8 means this will happen at 80% of max stamina. Set to 0 to turn this feature off.
 
 shortenDelayWhenStillBy: Shortens the regen delay while standing still by the specified fractional multiplier. At the default setting of 0.5, each second standing still counts for 1.5 seconds for ending the cooldown (i.e., 50% more). Set to 0 to turn this feature off.

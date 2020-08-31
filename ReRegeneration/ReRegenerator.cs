@@ -27,6 +27,7 @@ namespace ReRegeneration
         public Boolean percentageMode { get; set; }
         public Double regenWhileActiveRate { get; set; }
         public Double endExhaustionAt { get; set; }
+        public Double exhuastionPenalty { get; set; }
         public Double shortenDelayWhenStillBy { get; set; }
         public Double lengthenDelayWhenRunningBy { get; set; }
 
@@ -51,6 +52,7 @@ namespace ReRegeneration
 
             this.percentageMode = false;
             this.regenWhileActiveRate = 0.8;
+            this.exhuastionPenalty = 0.25;
             this.endExhaustionAt = 0.9;
             this.shortenDelayWhenStillBy = 0.5;
             this.lengthenDelayWhenRunningBy = 0.5;
@@ -94,6 +96,7 @@ namespace ReRegeneration
 
         bool percentageMode;                    //Whether we're using this mode of operation.
         double activeRegenMult;                 //Rate limiter while fishing, riding horse, etc.
+        double penalizeExhaustionBy;            //Penalty due to being exhausted.
         double endExhaustion;                   //For the exhuastion status end option.
         double stillnessDelayBonus;             //Staying still = shorter idle delay.
         double runningDelayMalus;               //Running = longer idle delay.
@@ -153,6 +156,9 @@ namespace ReRegeneration
 
             //Active regen ratio
             activeRegenMult = Math.Max(0.0, Math.Min(1.0, myConfig.regenWhileActiveRate));
+
+            //Exhaustion penalty
+            penalizeExhaustionBy = Math.Max(0.0, Math.Min(1.0, myConfig.exhuastionPenalty));
 
             //End exhaustion at?
             endExhaustion = Math.Max(0.0, Math.Min(1.0, myConfig.endExhaustionAt));
@@ -377,6 +383,13 @@ namespace ReRegeneration
                 else if (!myPlayer.movedDuringLastTick() && (stillnessDelayBonus > 0.0)) regenProgress = timeElapsed * (1.0 + stillnessDelayBonus);
                 else regenProgress = timeElapsed;
 
+                //If exhausted, increase delay by the penalty
+                if (myPlayer.exhausted)
+                {
+                    stamDelayMult += penalizeExhaustionBy;
+                    healthDelayMult += penalizeExhaustionBy;
+                }
+
                 //Check for player exertion. If player has used stamina since last tick, reset the cooldown.
                 //Decrement how long we've been on stamina cooldown otherwise.
                 if (myPlayer.stamina < lastStamina) { staminaCooldown = myConfig.staminaIdleSeconds * stamDelayMult; }
@@ -405,6 +418,13 @@ namespace ReRegeneration
                 {
                     stamMult *= stamRunRate;
                     healMult *= healthRunRate;
+                }
+
+                //If exhausted, reduce by the penalty.
+                if (myPlayer.exhausted)
+                {
+                    stamMult *= (1.0 - Math.Min(0.99, penalizeExhaustionBy));
+                    healMult *= (1.0 - Math.Min(0.99, penalizeExhaustionBy));
                 }
 
                 /*
