@@ -91,13 +91,11 @@ namespace ReRegeneration
         double timeElapsed;                     //Time since last check.
         double lastLogTime;                     //Time since last log event.
         double lastTickTime;                    //The time at the last tick processed.
-        double frozenTime;                      //Time spent in menus, cutscenes, etc.  
-        bool movePenalty;                       //Whether movement incurs a penalty.
-        bool actPenalty;                        //Whether "active" status incurs a penalty.
+        double frozenTime;                      //Time spent in menus, cutscenes, etc.
 
         bool percentageMode;                    //Whether we're using this mode of operation.
         double activeRegenMult;                 //Rate limiter while fishing, riding horse, etc.
-        double penalizeExhaustionBy;            //Penalty due to being exhausted.
+        double exhaustPenalty;                  //Penalty due to being exhausted.
         double endExhaustion;                   //For the exhuastion status end option.
         double stillnessDelayBonus;             //Staying still = shorter idle delay.
         double runningDelayMalus;               //Running = longer idle delay.
@@ -126,9 +124,6 @@ namespace ReRegeneration
             lastTickTime = 0.0;
             lastLogTime = 0.0;
             frozenTime = 0.0;
-
-            movePenalty = false;
-            actPenalty = false;
 
             helper.Events.GameLoop.SaveLoaded += StartupTasks;
             helper.Events.GameLoop.DayStarted += DailyUpdate;
@@ -160,7 +155,7 @@ namespace ReRegeneration
             activeRegenMult = Math.Max(0.0, Math.Min(1.0, myConfig.regenWhileActiveRate));
 
             //Exhaustion penalty
-            penalizeExhaustionBy = Math.Max(0.0, Math.Min(1.0, myConfig.exhuastionPenalty));
+            exhaustPenalty = Math.Max(0.0, Math.Min(1.0, myConfig.exhuastionPenalty));
 
             //End exhaustion at?
             endExhaustion = Math.Max(0.0, Math.Min(1.0, myConfig.endExhaustionAt));
@@ -374,8 +369,8 @@ namespace ReRegeneration
 
                 double regenProgress;   //Will be set to timeElapsed w/ modifiers
 
-                movePenalty = HasMovePenalty(myPlayer);
-                actPenalty = HasActPenalty(myPlayer);
+                bool movePenalty = HasMovePenalty(myPlayer);
+                bool actPenalty = HasActPenalty(myPlayer);
 
                 /* Determine how much progress made towards ending cooldown.
                  * 1. If running and there is a penalty, apply it to elapsed time.
@@ -389,8 +384,8 @@ namespace ReRegeneration
                 //If exhausted, increase delay by the penalty
                 if (myPlayer.exhausted)
                 {
-                    stamDelayMult += penalizeExhaustionBy;
-                    healthDelayMult += penalizeExhaustionBy;
+                    stamDelayMult += exhaustPenalty;
+                    healthDelayMult += exhaustPenalty;
                 }
 
                 //Check for player exertion. If player has used stamina since last tick, reset the cooldown.
@@ -423,7 +418,7 @@ namespace ReRegeneration
                     if (movePenalty) stamMult *= stamRunRate;
 
                     //If exhausted, reduce by the penalty.
-                    if (myPlayer.exhausted) stamMult *= (1.0 - Math.Min(0.99, penalizeExhaustionBy));
+                    if (myPlayer.exhausted) stamMult *= (1.0 - Math.Min(0.99, exhaustPenalty));
 
                     //Per-sec val * multiplier * fractions of 1 sec passed
                     myPlayer.stamina += (float)(stamRegenVal * stamMult * timeElapsed);
@@ -452,7 +447,7 @@ namespace ReRegeneration
                     if (movePenalty) healMult *= healthRunRate;
 
                     //If exhausted, reduce by the penalty.
-                    if (myPlayer.exhausted) healMult *= (1.0 - Math.Min(0.99, penalizeExhaustionBy));
+                    if (myPlayer.exhausted) healMult *= (1.0 - Math.Min(0.99, exhaustPenalty));
 
                     /* 
                      * Basically, we want to try to restore health every interval, but we absolutely need a round number
