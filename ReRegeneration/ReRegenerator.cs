@@ -92,7 +92,8 @@ namespace ReRegeneration
         double lastLogTime;                     //Time since last log event.
         double lastTickTime;                    //The time at the last tick processed.
         double frozenTime;                      //Time spent in menus, cutscenes, etc.  
-        bool movePenalty;                       //Whether movement will block regeneration.
+        bool movePenalty;                       //Whether movement incurs a penalty.
+        bool actPenalty;                        //Whether "active" status incurs a penalty.
 
         bool percentageMode;                    //Whether we're using this mode of operation.
         double activeRegenMult;                 //Rate limiter while fishing, riding horse, etc.
@@ -127,6 +128,7 @@ namespace ReRegeneration
             frozenTime = 0.0;
 
             movePenalty = false;
+            actPenalty = false;
 
             helper.Events.GameLoop.SaveLoaded += StartupTasks;
             helper.Events.GameLoop.DayStarted += DailyUpdate;
@@ -373,6 +375,7 @@ namespace ReRegeneration
                 double regenProgress;   //Will be set to timeElapsed w/ modifiers
 
                 movePenalty = HasMovePenalty(myPlayer);
+                actPenalty = HasActPenalty(myPlayer);
 
                 /* Determine how much progress made towards ending cooldown.
                  * 1. If running and there is a penalty, apply it to elapsed time.
@@ -402,31 +405,6 @@ namespace ReRegeneration
                 if (myPlayer.health < lastHealth) { healthCooldown = myConfig.healthIdleSeconds * healthDelayMult; }
                 else if (healthCooldown > 0) { healthCooldown -= regenProgress; }
 
-                //Start building the regen modifier.
-                double stamMult = stamRegenMult;
-                double healMult = healthRegenMult;
-
-                //If "active" reduce by specified amount.
-                if (HasActPenalty(myPlayer))
-                {
-                    stamMult *= activeRegenMult;
-                    healMult *= activeRegenMult;
-                }
-
-                //If running, reduce by specified amount.
-                if (movePenalty)
-                {
-                    stamMult *= stamRunRate;
-                    healMult *= healthRunRate;
-                }
-
-                //If exhausted, reduce by the penalty.
-                if (myPlayer.exhausted)
-                {
-                    stamMult *= (1.0 - Math.Min(0.99, penalizeExhaustionBy));
-                    healMult *= (1.0 - Math.Min(0.99, penalizeExhaustionBy));
-                }
-
                 /*
                  * Process stamina regeneration. Here are the criteria:
                  * -Must have some stamina regen value.
@@ -435,6 +413,18 @@ namespace ReRegeneration
                 */
                 if (stamRegenVal > 0 && myPlayer.stamina < maxStamRegenAmount && staminaCooldown <= 0)
                 {
+                    //Start building the regen modifier.
+                    double stamMult = stamRegenMult;
+
+                    //If "active" reduce by specified amount.
+                    if (actPenalty) stamMult *= activeRegenMult;
+
+                    //If running, reduce by specified amount.
+                    if (movePenalty) stamMult *= stamRunRate;
+
+                    //If exhausted, reduce by the penalty.
+                    if (myPlayer.exhausted) stamMult *= (1.0 - Math.Min(0.99, penalizeExhaustionBy));
+
                     //Per-sec val * multiplier * fractions of 1 sec passed
                     myPlayer.stamina += (float)(stamRegenVal * stamMult * timeElapsed);
 
@@ -452,6 +442,18 @@ namespace ReRegeneration
                 */
                 if (healthRegenVal > 0 && myPlayer.health < maxHealthRegenAmount && healthCooldown <= 0)
                 {
+                    //Start building the regen modifier.
+                    double healMult = healthRegenMult;
+
+                    //If "active" reduce by specified amount.
+                    if (actPenalty) healMult *= activeRegenMult;
+
+                    //If running, reduce by specified amount.
+                    if (movePenalty) healMult *= healthRunRate;
+
+                    //If exhausted, reduce by the penalty.
+                    if (myPlayer.exhausted) healMult *= (1.0 - Math.Min(0.99, penalizeExhaustionBy));
+
                     /* 
                      * Basically, we want to try to restore health every interval, but we absolutely need a round number
                      * because player health is an integer, not a float. So we "accumulate" fractional health each interval 
