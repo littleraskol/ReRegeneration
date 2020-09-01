@@ -151,14 +151,14 @@ namespace ReRegeneration
             activeRegenMult = Math.Max(0.0, Math.Min(1.0, myConfig.regenWhileActiveRate));
 
             //Exhaustion penalty
-            exhaustPenalty = Math.Max(0.0, Math.Min(1.0, myConfig.exhuastionPenalty));
+            exhaustPenalty = 1.0 - Math.Max(0.0, Math.Min(0.99, myConfig.exhuastionPenalty));
 
             //End exhaustion at?
             endExhaustion = Math.Max(0.0, Math.Min(1.0, myConfig.endExhaustionAt));
 
             //Delay bonuses and penalties
-            stillnessDelayBonus = Math.Max(0.0, myConfig.shortenDelayWhenStillBy);
-            runningDelayMalus = Math.Max(0.0, Math.Min(1.0, myConfig.lengthenDelayWhenRunningBy));
+            stillnessDelayBonus = 1.0 + Math.Max(0.0, myConfig.shortenDelayWhenStillBy);
+            runningDelayMalus = 1.0 - Math.Max(0.0, Math.Min(1.0, myConfig.lengthenDelayWhenRunningBy));
         }
 
         private void DailyUpdate(object sender, DayStartedEventArgs e)
@@ -374,7 +374,7 @@ namespace ReRegeneration
                  * 3. Otherwise, elapsed time is progress.
                  */
                 if (movePenalty && (runningDelayMalus > 0.0)) regenProgress = timeElapsed * runningDelayMalus;
-                else if (!myPlayer.movedDuringLastTick() && (stillnessDelayBonus > 0.0)) regenProgress = timeElapsed * (1.0 + stillnessDelayBonus);
+                else if (!myPlayer.movedDuringLastTick() && (stillnessDelayBonus > 0.0)) regenProgress = timeElapsed * stillnessDelayBonus;
                 else regenProgress = timeElapsed;
 
                 //If exhausted, increase delay by the penalty
@@ -414,7 +414,7 @@ namespace ReRegeneration
                     if (movePenalty) stamMult *= runRegenRate;
 
                     //If exhausted, reduce by the penalty.
-                    if (myPlayer.exhausted) stamMult *= (1.0 - Math.Min(0.99, exhaustPenalty));
+                    if (myPlayer.exhausted) stamMult *= exhaustPenalty;
 
                     //Per-sec val * multiplier * fractions of 1 sec passed
                     myPlayer.stamina += (float)(stamRegenVal * stamMult * timeElapsed);
@@ -443,7 +443,7 @@ namespace ReRegeneration
                     if (movePenalty) healMult *= runRegenRate;
 
                     //If exhausted, reduce by the penalty.
-                    if (myPlayer.exhausted) healMult *= (1.0 - Math.Min(0.99, exhaustPenalty));
+                    if (myPlayer.exhausted) healMult *= exhaustPenalty;
 
                     /* 
                      * Basically, we want to try to restore health every interval, but we absolutely need a round number
