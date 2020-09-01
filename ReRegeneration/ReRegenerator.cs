@@ -12,20 +12,19 @@ namespace ReRegeneration
     {
         public Double staminaRegenPerSecond { get; set; }
         public Int32 staminaIdleSeconds { get; set; }
-        public Double regenStaminaWhileRunningRate { get; set; }
         public Double maxStaminaRatioToRegen { get; set; }
         public Double scaleStaminaRegenRateTo { get; set; }
         public Double scaleStaminaRegenDelayTo { get; set; }
 
         public Double healthRegenPerSecond { get; set; }
         public Int32 healthIdleSeconds { get; set; }
-        public Double regenHealthWhileRunningRate { get; set; }
         public Double maxHealthRatioToRegen { get; set; }
         public Double scaleHealthRegenRateTo { get; set; }
         public Double scaleHealthRegenDelayTo { get; set; }
 
         public Boolean percentageMode { get; set; }
         public Double regenWhileActiveRate { get; set; }
+        public Double regenWhileRunningRate { get; set; }
         public Double endExhaustionAt { get; set; }
         public Double exhuastionPenalty { get; set; }
         public Double shortenDelayWhenStillBy { get; set; }
@@ -38,20 +37,19 @@ namespace ReRegeneration
         {
             this.staminaRegenPerSecond = 1.0;
             this.staminaIdleSeconds = 10;
-            this.regenStaminaWhileRunningRate = 0.25;
             this.maxStaminaRatioToRegen = 0.8;
             this.scaleStaminaRegenRateTo = 0.5;
             this.scaleStaminaRegenDelayTo = 0.5;
 
             this.healthRegenPerSecond = 0.1;
             this.healthIdleSeconds = 15;
-            this.regenHealthWhileRunningRate = 0.0;
             this.maxHealthRatioToRegen = 0.8;
             this.scaleHealthRegenRateTo = 0.75;
             this.scaleHealthRegenDelayTo = 0.75;
 
             this.percentageMode = false;
             this.regenWhileActiveRate = 0.8;
+            this.regenWhileRunningRate = 0.2;
             this.exhuastionPenalty = 0.25;
             this.endExhaustionAt = 0.9;
             this.shortenDelayWhenStillBy = 0.5;
@@ -68,7 +66,6 @@ namespace ReRegeneration
         double lastStamina;                     //Last recorded player stamina value.
         //double lastMaxStamina;                  //Last recorded max stamina value.
         double staminaCooldown;                 //How long to wait before beginning stamina regen.
-        double stamRunRate;                     //Running rate.
         double maxStamRatio;                    //Percent of max stam to regen to.
         float maxStamRegenAmount;               //Actual max stamina value to regen.
         double stamRegenMult;                   //Used for scaling regen.
@@ -80,7 +77,6 @@ namespace ReRegeneration
         //int lastMaxHealth;                      //Last recorded max health value.
         double healthAccum;                     //Accumulated health regenerated while running.
         double healthCooldown;                  //How long to wait before beginning health regen.
-        double healthRunRate;                   //Running rate.
         double maxHealthRatio;                  //Percent of max health to regen to.
         int maxHealthRegenAmount;               //Actual max health value to regen.
         double healthRegenMult;                 //Used for scaling regen.
@@ -95,6 +91,7 @@ namespace ReRegeneration
 
         bool percentageMode;                    //Whether we're using this mode of operation.
         double activeRegenMult;                 //Rate limiter while fishing, riding horse, etc.
+        double runRegenRate;                    //Running rate.
         double exhaustPenalty;                  //Penalty due to being exhausted.
         double endExhaustion;                   //For the exhuastion status end option.
         double stillnessDelayBonus;             //Staying still = shorter idle delay.
@@ -144,8 +141,7 @@ namespace ReRegeneration
             verbose = myConfig.verboseMode;
 
             //Running rates
-            stamRunRate = Math.Max(0.0, Math.Min(1.0, myConfig.regenStaminaWhileRunningRate));
-            healthRunRate = Math.Max(0.0, Math.Min(1.0, myConfig.regenHealthWhileRunningRate));
+            runRegenRate = Math.Max(0.0, Math.Min(1.0, myConfig.regenWhileRunningRate));
 
             //Max regen ratios
             maxStamRatio = Math.Max(0.01, Math.Min(1.0, myConfig.maxStaminaRatioToRegen));
@@ -293,7 +289,7 @@ namespace ReRegeneration
             if (doAll || doMod)
             {
                 retStr += String.Format("\n\n-- Mod Status --\n*Stam recovery rate: {0}\n*While running: {1}\n*Health recovery rate: {2}\n*While running: {3}\n*Percent mode: {4}",
-                    stamRegenVal, stamRunRate, healthRegenVal, healthRunRate, percentageMode);
+                    stamRegenVal, runRegenRate, healthRegenVal, runRegenRate, percentageMode);
             }
 
             if (doAll || doStam)
@@ -393,7 +389,7 @@ namespace ReRegeneration
                 if (myPlayer.stamina < lastStamina) { staminaCooldown = myConfig.staminaIdleSeconds * stamDelayMult; }
                 else if (staminaCooldown > 0) { staminaCooldown -= regenProgress; }
 
-                LogIt(String.Format("Timings:\nTime elpased this check = {0}\nProgress to ending cooldown = {1}\nCooldown time left = {2}", Math.Round(timeElapsed, 2), Math.Round(regenProgress, 2), Math.Round(staminaCooldown, 2)));
+                //LogIt(String.Format("Timings:\nTime elpased this check = {0}\nProgress to ending cooldown = {1}\nCooldown time left = {2}", Math.Round(timeElapsed, 2), Math.Round(regenProgress, 2), Math.Round(staminaCooldown, 2)));
 
                 //Check for player injury. If player has been injured since last tick, reset the cooldown.
                 //Decrement how long we've been on health cooldown otherwise.
@@ -415,7 +411,7 @@ namespace ReRegeneration
                     if (actPenalty) stamMult *= activeRegenMult;
 
                     //If running, reduce by specified amount.
-                    if (movePenalty) stamMult *= stamRunRate;
+                    if (movePenalty) stamMult *= runRegenRate;
 
                     //If exhausted, reduce by the penalty.
                     if (myPlayer.exhausted) stamMult *= (1.0 - Math.Min(0.99, exhaustPenalty));
@@ -444,7 +440,7 @@ namespace ReRegeneration
                     if (actPenalty) healMult *= activeRegenMult;
 
                     //If running, reduce by specified amount.
-                    if (movePenalty) healMult *= healthRunRate;
+                    if (movePenalty) healMult *= runRegenRate;
 
                     //If exhausted, reduce by the penalty.
                     if (myPlayer.exhausted) healMult *= (1.0 - Math.Min(0.99, exhaustPenalty));
@@ -460,10 +456,10 @@ namespace ReRegeneration
                     //If we've accumulated 1 or more health, apply the whole number value and recalc the accumulation accordingly.
                     if (healthAccum >= 1)
                     {
-                        double rmndr = healthAccum % 1;     //Capture fractional value
-                        healthAccum -= rmndr;               //Reduce to whole number
+                        double rmndr = healthAccum % 1;       //Capture fractional value
+                        healthAccum -= rmndr;                 //Reduce to whole number
                         myPlayer.health += (int)healthAccum;  //Apply whole number value
-                        healthAccum = rmndr;                //Accumulate remainder
+                        healthAccum = rmndr;                  //Accumulate remainder
                     }
 
                     //If we have achieved a round positive number accumulated, apply it and reset the accumulation.
