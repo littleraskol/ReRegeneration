@@ -34,7 +34,7 @@ Health will recover by 1 point every 10 seconds after waiting 10 seconds. Passiv
 
 There are other options that modify how the regen system works:
 
-percentageMode: Whether the "RegenPerSecond" values will be interpreted as percentages of the maximum value, so that a value of "1" will not regenerate 1 point of stamina per second but rather 1% of the player's maximum stamina. This allows the regeneration rate to scale with higher levels of health and stamina. So, at the default stamina regen value of staminaRegenPerSecond = 1, at the start of the game 2.7 points of stamina will regenerate per second (1% of the starting value of 270 stamina). Note that if you do enable percentage mode, I'd advise you to change the default value of "staminaRegenPerSecond" to 0.4 because this will result in a starting regen rate of 1.08 points per second, which is close to the default in normal mode. Health starts at 100 points, so there's no discrepancy there. (Default = false)
+percentageMode: Whether the "RegenPerSecond" values will be interpreted as percentages of the maximum value, so that a value of "1" will not regenerate 1 point of stamina per second but rather 1% of the player's maximum stamina. This allows the regeneration rate to scale with higher levels of health and stamina. So, at the default stamina regen value of staminaRegenPerSecond = 1, at the start of the game 2.7 points of stamina will regenerate per second (1% of the starting value of 270 stamina and assuming maxStaminaRegen is set to 1). Note that if you do enable percentage mode, I'd advise you to change the default value of "staminaRegenPerSecond" to 0.4 because this will result in a starting regen rate of 1.08 points per second, which is close to the default in normal mode. Health starts at 100 points, so there's no discrepancy there. (Default = false)
 
 regenWhileActiveRate: A 0 to 1 fractional value to multiply regen rates by while fishing or riding a horse. Default = 0.8, meaning 20% less regeneration. Set to 1 to ignore this feature. Set to 0 to turn regeneration off during these activities.
 
@@ -46,13 +46,13 @@ endExhaustionAt: A 0 to 1 fractional value specifying when to end the "exhaustio
 
 shortenDelayWhenStillBy: Shortens the regen delay while standing still by the specified fractional multiplier. At the default setting of 0.5, each second standing still counts for 1.5 seconds for ending the cooldown (i.e., 50% more). Set to 0 to turn this feature off.
 
-lengthenDelayWhenRunningBy: Lengthens the regen delay while running by the specified 0 to 1 fractional value. At the default setting of 0.5, each second running counts as half of a second for ending the cooldown (i.e., 50% less). Set to 0 to turn this feature off. Note that if set to one, each second running counts for 100% of a second less, i.e., 0 seconds, meaning that the regen cooldown lasts indefinitely while running.
+lengthenDelayWhenRunningBy: Lengthens the regen delay while running by the specified 0 to 1 fractional value. At the default setting of 0.5, each second running counts as half of a second for ending the cooldown (i.e., 50% less). Set to 0 to turn this feature off. Note that if set to 1, each second running counts for 100% of a second less, i.e., 0 seconds, meaning that the regen cooldown lasts indefinitely while running.
 
-Finally, there is a "verboseMode" option (which does not even appear in the config file packaged with the mod) should probably be ignored by most players. By default it is "false" and controls whether to output regular calibration data.
+Finally, there is a "verboseMode" option (which does not even appear in the config file packaged with the mod) that should probably be ignored by most players. By default it is "false" and controls whether to output regular calibration data.
 
 2. CHANGELOG
 
-v2.0.0 (08/??/20)
+v2.0.0 (09/??/20)
 -Updated to most recent SMAPI and SDV versions.
 -Bunch of new options.
 
