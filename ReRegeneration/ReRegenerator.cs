@@ -183,7 +183,7 @@ namespace ReRegeneration
         */
         void SetRegenVals()
         {
-            if (!Game1.hasLoadedGame) return;   //Not sure this can ever happen but eh
+            if (!Game1.hasLoadedGame || myPlayer == null) return;   //Not sure this can ever happen but eh
 
             //Maximum values that passive regen can reach
             maxStamRegenAmount = (float)Math.Round((double)myPlayer.maxStamina * maxStamRatio);
