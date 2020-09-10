@@ -342,8 +342,8 @@ namespace ReRegeneration
 
         private void OnUpdate(object sender, UpdateTickedEventArgs e)
         {
-            //All of this requires that the game be loaded and this be a quarter-second tick.
-            if (!Game1.hasLoadedGame || !e.IsMultipleOf(15)) return;
+            //All of this requires that the game be loaded, the player is set, and this be a quarter-second tick.
+            if (!Game1.hasLoadedGame || myPlayer == null || !e.IsMultipleOf(15)) return;
 
             //Make sure we know exactly how much time has elapsed
             currentTime = Game1.currentGameTime.TotalGameTime.TotalSeconds;
