@@ -68,6 +68,7 @@ namespace ReRegeneration
         double staminaCooldown;                 //How long to wait before beginning stamina regen.
         double maxStamRatio;                    //Percent of max stam to regen to.
         float maxStamRegenAmount;               //Actual max stamina value to regen.
+        float playerStamNow;                    //Holds current value, for validation.
         double stamRegenMult;                   //Used for scaling regen.
         double stamDelayMult;                   //Used for scaling idle delay.
 
@@ -79,6 +80,7 @@ namespace ReRegeneration
         double healthCooldown;                  //How long to wait before beginning health regen.
         double maxHealthRatio;                  //Percent of max health to regen to.
         int maxHealthRegenAmount;               //Actual max health value to regen.
+        int playerHealthNow;                    //Holds current value, for validation.
         double healthRegenMult;                 //Used for scaling regen.
         double healthDelayMult;                 //Used for scaling idle delay.
 
@@ -187,8 +189,12 @@ namespace ReRegeneration
             maxStamRegenAmount = (float)Math.Round((double)myPlayer.maxStamina * maxStamRatio);
             maxHealthRegenAmount = (int)Math.Round((double)myPlayer.maxHealth * maxHealthRatio);
 
-            float stamRatioToMax = Math.Min(myPlayer.stamina, this.maxStamRegenAmount) / this.maxStamRegenAmount;
-            float healthRatioToMax = Math.Min(myPlayer.health, this.maxHealthRegenAmount) / this.maxHealthRegenAmount;
+            //Validated current values
+            playerStamNow = myPlayer.stamina < 0 ? 0 : myPlayer.stamina;
+            playerHealthNow = myPlayer.health < 0 ? 0 : myPlayer.health;    //Shouldn't be possible but eh...
+
+            float stamRatioToMax = Math.Min(playerStamNow, this.maxStamRegenAmount) / this.maxStamRegenAmount;
+            float healthRatioToMax = Math.Min(playerHealthNow, this.maxHealthRegenAmount) / this.maxHealthRegenAmount;
 
             //Using as a holding value until modified
             stamRegenMult = Math.Max(0.0, Math.Min(1.0, myConfig.scaleStaminaRegenRateTo));
@@ -351,6 +357,7 @@ namespace ReRegeneration
             {
                 SetRegenVals();
 
+                //Reduce time we want to "use" by frozen time.
                 if (frozenTime > 0.0)
                 {
                     timeElapsed = timeElapsed > frozenTime ? timeElapsed - frozenTime : 0.0;

@@ -6,13 +6,13 @@ The config file (config.json) clusters the options for health and stamina, but t
 
 RegenPerSecond: The amount to be regenerated per second.
 
-IdleSeconds: How long to wait since the last exertion/injury before regeneration begins.
+IdleSeconds: How long to wait since the last exertion/injury before regeneration begins. This is referred to as the "regen delay" or "cooldown."
 
 MaxRegen: Max percentage value of total health/stamina that passive regen can reach. Set to 1 to be able to passively regenerate all stamina or health; any value higher than 1 will be treated as 1. Note that the lowest possible value for this is 0.01 (or 1%), anything lower will be treated as that. IMPORTANT: Every mod setting based on the player's maximum stamina or health will scale to the value derived from this; in other words, "max stamina/health" in these definitions really means the actual in-game player value multiplied by this value.
 
-scaleRegenRateTo: Scale the rate of health/stamina regen to be slower when lower. Specifically, as the value approaches 0, the regen rate gets closer to the assigned value (by default, cut in half). Setting to 0 will turn this feature off.
+scaleRegenRateTo: Scale the rate of health/stamina regen to be slower when lower. Specifically, as the value approaches 0, the regen rate gets closer being multiplied by this setting's value (e.g. at 0.5, cut in half). Setting to 0 will turn this feature off.
 
-scaleRegenDelayTo: Scale the time it takes for health/stamina regen to start to be longer when lower. Specifically, as the value approaches 0, the delay time gets closer to being multiplied by 1 plus this setting's value (by default, 50% longer). Setting to 0 will turn this feature off. 
+scaleRegenDelayTo: Scale the time it takes for health/stamina regen to start to be longer when lower. Specifically, as the value approaches 0, the delay time gets closer to being multiplied by 1 plus this setting's value (e.g. at 0.5, 50% longer). Setting to 0 will turn this feature off. 
 
 The default values (for stamina and then health) are:
 
