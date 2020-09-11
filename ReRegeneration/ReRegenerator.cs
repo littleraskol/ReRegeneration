@@ -351,18 +351,19 @@ namespace ReRegeneration
             lastTickTime = currentTime;
 
             //Catches and attempts to deal with menus, cutscenes, etc. reducing the cooldown.
-            if (!Game1.shouldTimePass()) frozenTime += timeElapsed;
+            //if (!Game1.shouldTimePass()) frozenTime += timeElapsed;
             //If time can pass (i.e., are not in an event/cutscene/menu/festival)...
-            else
+            //else
+            if (Game1.shouldTimePass())
             {
                 SetRegenVals();
 
                 //Reduce time we want to "use" by frozen time.
-                if (frozenTime > 0.0)
-                {
-                    timeElapsed = timeElapsed > frozenTime ? timeElapsed - frozenTime : 0.0;
-                    frozenTime = 0.0;
-                }
+                //if (frozenTime > 0.0)
+                //{
+                //    timeElapsed = timeElapsed > frozenTime ? timeElapsed - frozenTime : 0.0;
+                //    frozenTime = 0.0;
+                //}
 
                 //Do this once.
                 LogIt(StatReport(false, true, false, false), ((currentTime < 30.0) && lastLogTime == 0.0));
