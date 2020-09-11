@@ -10,53 +10,55 @@ namespace ReRegeneration
 
     class ModConfig
     {
-        public Double staminaRegenPerSecond { get; set; }
-        public Int32 staminaIdleSeconds { get; set; }
-        public Double maxStaminaRatioToRegen { get; set; }
-        public Double scaleStaminaRegenRateTo { get; set; }
-        public Double scaleStaminaRegenDelayTo { get; set; }
+        public Double staminaRegenPerSecond { get; set; } = 1.0;
+        public Int32 staminaIdleSeconds { get; set; } = 5;
+        public Double maxStaminaRatioToRegen { get; set; } = 0.8;
+        public Double scaleStaminaRegenRateTo { get; set; } = 0.5;
+        public Double scaleStaminaRegenDelayTo { get; set; } = 0.5;
 
-        public Double healthRegenPerSecond { get; set; }
-        public Int32 healthIdleSeconds { get; set; }
-        public Double maxHealthRatioToRegen { get; set; }
-        public Double scaleHealthRegenRateTo { get; set; }
-        public Double scaleHealthRegenDelayTo { get; set; }
+        public Double healthRegenPerSecond { get; set; } = 0.1;
+        public Int32 healthIdleSeconds { get; set; } = 10;
+        public Double maxHealthRatioToRegen { get; set; } = 0.5;
+        public Double scaleHealthRegenRateTo { get; set; } = 0.75;
+        public Double scaleHealthRegenDelayTo { get; set; } = 0.75;
 
-        public Boolean percentageMode { get; set; }
-        public Double regenWhileActiveRate { get; set; }
-        public Double regenWhileRunningRate { get; set; }
-        public Double endExhaustionAt { get; set; }
-        public Double exhuastionPenalty { get; set; }
-        public Double shortenDelayWhenStillBy { get; set; }
-        public Double lengthenDelayWhenRunningBy { get; set; }
+        public Boolean percentageMode { get; set; } = false;
+        public Double regenWhileActiveRate { get; set; } = 0.8;
+        public Double regenWhileRunningRate { get; set; } = 0.2;
+        public Double endExhaustionAt { get; set; } = 0.25;
+        public Double exhuastionPenalty { get; set; } = 0.9;
+        public Double shortenDelayWhenStillBy { get; set; } = 0.5;
+        public Double lengthenDelayWhenRunningBy { get; set; } = 0.5;
 
-        public Boolean verboseMode { get; set; }
+        public Double timeInterval { get; set; } = 0.25;
+        public Boolean verboseMode { get; set; } = false;
 
 
-        public ModConfig()
-        {
-            this.staminaRegenPerSecond = 1.0;
-            this.staminaIdleSeconds = 10;
-            this.maxStaminaRatioToRegen = 0.8;
-            this.scaleStaminaRegenRateTo = 0.5;
-            this.scaleStaminaRegenDelayTo = 0.5;
-
-            this.healthRegenPerSecond = 0.1;
-            this.healthIdleSeconds = 15;
-            this.maxHealthRatioToRegen = 0.8;
-            this.scaleHealthRegenRateTo = 0.75;
-            this.scaleHealthRegenDelayTo = 0.75;
-
-            this.percentageMode = false;
-            this.regenWhileActiveRate = 0.8;
-            this.regenWhileRunningRate = 0.2;
-            this.exhuastionPenalty = 0.25;
-            this.endExhaustionAt = 0.9;
-            this.shortenDelayWhenStillBy = 0.5;
-            this.lengthenDelayWhenRunningBy = 0.5;
-
-            this.verboseMode = false;
-        }
+        //public ModConfig()
+        //{
+        //    this.staminaRegenPerSecond = 1.0;
+        //    this.staminaIdleSeconds = 10;
+        //    this.maxStaminaRatioToRegen = 0.8;
+        //    this.scaleStaminaRegenRateTo = 0.5;
+        //    this.scaleStaminaRegenDelayTo = 0.5;
+        //
+        //    this.healthRegenPerSecond = 0.1;
+        //    this.healthIdleSeconds = 15;
+        //    this.maxHealthRatioToRegen = 0.8;
+        //    this.scaleHealthRegenRateTo = 0.75;
+        //    this.scaleHealthRegenDelayTo = 0.75;
+        //
+        //    this.percentageMode = false;
+        //    this.regenWhileActiveRate = 0.8;
+        //    this.regenWhileRunningRate = 0.2;
+        //    this.exhuastionPenalty = 0.25;
+        //    this.endExhaustionAt = 0.9;
+        //    this.shortenDelayWhenStillBy = 0.5;
+        //    this.lengthenDelayWhenRunningBy = 0.5;
+        //
+        //    this.timeInterval = 0.25;
+        //    this.verboseMode = false;
+        //}
     }
 
     class ReRegenerator : Mod
@@ -89,7 +91,6 @@ namespace ReRegeneration
         double timeElapsed;                     //Time since last check.
         double lastLogTime;                     //Time since last log event.
         double lastTickTime;                    //The time at the last tick processed.
-        double frozenTime;                      //Time spent in menus, cutscenes, etc.
 
         bool percentageMode;                    //Whether we're using this mode of operation.
         double activeRegenMult;                 //Rate limiter while fishing, riding horse, etc.
@@ -99,6 +100,8 @@ namespace ReRegeneration
         double stillnessDelayBonus;             //Staying still = shorter idle delay.
         double runningDelayMalus;               //Running = longer idle delay.
 
+        double intervalMult;                    //Seconds or fractions thereof, defines regen interval.
+        uint updateTickCount;                    //How many actual ticks the above translates into.
         bool verbose;                           //Whether to log regular diagnostics
         
         Farmer myPlayer;                        //Our player.
@@ -122,7 +125,6 @@ namespace ReRegeneration
             timeElapsed = 0.0;
             lastTickTime = 0.0;
             lastLogTime = 0.0;
-            frozenTime = 0.0;
 
             helper.Events.GameLoop.SaveLoaded += StartupTasks;
             helper.Events.GameLoop.DayStarted += DailyUpdate;
@@ -141,6 +143,10 @@ namespace ReRegeneration
 
             //Verbosity?
             verbose = myConfig.verboseMode;
+
+            //Set update interval/ticks
+            intervalMult = Math.Max(0.01, myConfig.timeInterval);
+            updateTickCount = (uint)(60 * intervalMult);
 
             //Running rates
             runRegenRate = Math.Max(0.0, Math.Min(1.0, myConfig.regenWhileRunningRate));
@@ -170,6 +176,10 @@ namespace ReRegeneration
             healthCooldown = 0;
             healthAccum = 0.0;
 
+            //Reset update interval/ticks
+            intervalMult = Math.Max(0.01, myConfig.timeInterval);
+            updateTickCount = (uint)(60 * intervalMult);
+
             //Every day, initialize relevant values. This happens very frequently but I want to get some baseline values.
             SetRegenVals();
         }
@@ -184,6 +194,10 @@ namespace ReRegeneration
         void SetRegenVals()
         {
             if (!Game1.hasLoadedGame || myPlayer == null) return;   //Not sure this can ever happen but eh
+
+            //Reset update interval/ticks
+            intervalMult = Math.Max(0.01, myConfig.timeInterval);
+            updateTickCount = (uint)(60 * intervalMult);
 
             //Maximum values that passive regen can reach
             maxStamRegenAmount = (float)Math.Round((double)myPlayer.maxStamina * maxStamRatio);
@@ -343,7 +357,7 @@ namespace ReRegeneration
         private void OnUpdate(object sender, UpdateTickedEventArgs e)
         {
             //All of this requires that the game be loaded, the player is set, and this be a quarter-second tick.
-            if (!Game1.hasLoadedGame || myPlayer == null || !e.IsMultipleOf(15)) return;
+            if (!Game1.hasLoadedGame || myPlayer == null || !e.IsMultipleOf(updateTickCount)) return;
 
             //Make sure we know exactly how much time has elapsed
             currentTime = Game1.currentGameTime.TotalGameTime.TotalSeconds;
@@ -425,7 +439,7 @@ namespace ReRegeneration
                     if (myPlayer.exhausted) stamMult *= exhaustPenalty;
 
                     //Per-sec val * multiplier * fractions of 1 sec passed
-                    myPlayer.stamina += (float)(stamRegenVal * stamMult * timeElapsed);
+                    myPlayer.stamina += (float)(stamRegenVal * stamMult * intervalMult);
 
                     //Final sanity check
                     if (myPlayer.stamina > maxStamRegenAmount) { myPlayer.stamina = maxStamRegenAmount; }
@@ -459,7 +473,7 @@ namespace ReRegeneration
                      * (only actually fractional under some circumstances). In this case, the fraction is not applied to
                      * the regen amount so much as accumulated per interval.
                     */
-                    healthAccum += (healthRegenVal * healMult * timeElapsed); //Per-sec val * multiplier * fractions of 1 sec passed
+                    healthAccum += (healthRegenVal * healMult * intervalMult); //Per-sec val * multiplier * fractions of 1 sec passed
 
                     //If we've accumulated 1 or more health, apply the whole number value and recalc the accumulation accordingly.
                     if (healthAccum >= 1)

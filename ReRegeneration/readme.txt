@@ -48,7 +48,11 @@ shortenDelayWhenStillBy: Shortens the regen delay while standing still by the sp
 
 lengthenDelayWhenRunningBy: Lengthens the regen delay while running by the specified 0 to 1 fractional value. At the default setting of 0.5, each second running counts as half of a second for ending the cooldown (i.e., 50% less). Set to 0 to turn this feature off. Note that if set to 1, each second running counts for 100% of a second less, i.e., 0 seconds, meaning that the regen cooldown lasts indefinitely while running.
 
-Finally, there is a "verboseMode" option (which does not even appear in the config file packaged with the mod) that should probably be ignored by most players. By default it is "false" and controls whether to output regular calibration data.
+Finally, there are two "hidden" config items that are advanced and not needed by most players. These do not appear in the config file by default but can be added.
+
+timeInterval: How often, in seconds, to actually perform regeneration calculations. By default this is 0.25, meaning every quarter second (or about 15 game ticks). Note that this has no impact on any "per second" values, as they are multiplied accordingly. Minimum value is 0.01, anything less than that will be treated as 0.01. This setting is not really useful unless you have major performance issues. The higher this number is, the less frequently the mod will do any real calculations and therefore the less work it makes your computer do.
+
+verboseMode: By default it is "false" and controls whether to output regular calibration data.
 
 2. CHANGELOG
 
