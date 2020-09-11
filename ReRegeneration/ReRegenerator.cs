@@ -176,10 +176,6 @@ namespace ReRegeneration
             healthCooldown = 0;
             healthAccum = 0.0;
 
-            //Reset update interval/ticks
-            intervalMult = Math.Max(0.01, myConfig.timeInterval);
-            updateTickCount = (uint)(60 * intervalMult);
-
             //Every day, initialize relevant values. This happens very frequently but I want to get some baseline values.
             SetRegenVals();
         }
