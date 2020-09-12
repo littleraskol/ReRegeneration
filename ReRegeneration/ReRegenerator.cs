@@ -193,7 +193,7 @@ namespace ReRegeneration
 
             //Reset update interval/ticks
             intervalMult = Math.Max(0.01, myConfig.timeInterval);
-            updateTickCount = (uint)(60 * intervalMult);
+            updateTickCount = (uint)Math.Max(1 ,(60 * intervalMult));
 
             //Maximum values that passive regen can reach
             maxStamRegenAmount = (float)Math.Round((double)myPlayer.maxStamina * maxStamRatio);
