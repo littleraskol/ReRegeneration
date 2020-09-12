@@ -146,7 +146,7 @@ namespace ReRegeneration
 
             //Set update interval/ticks
             intervalMult = Math.Max(0.01, myConfig.timeInterval);
-            updateTickCount = (uint)(60 * intervalMult);
+            updateTickCount = (uint)Math.Max(1, (60 * intervalMult));
 
             //Running rates
             runRegenRate = Math.Max(0.0, Math.Min(1.0, myConfig.regenWhileRunningRate));
