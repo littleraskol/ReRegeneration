@@ -95,7 +95,8 @@ namespace ReRegeneration
         bool percentageMode;                    //Whether we're using this mode of operation.
         double activeRegenMult;                 //Rate limiter while fishing, riding horse, etc.
         double runRegenRate;                    //Running rate.
-        double exhaustPenalty;                  //Penalty due to being exhausted.
+        double exhaustRegenPenalty;                  //Penalty to regen due to being exhausted.
+        double exhaustCooldownPenalty;                  //Penalty to cooldown due to being exhausted.
         double endExhaustion;                   //For the exhuastion status end option.
         double stillnessDelayBonus;             //Staying still = shorter idle delay.
         double runningDelayMalus;               //Running = longer idle delay.
@@ -126,12 +127,13 @@ namespace ReRegeneration
             lastTickTime = 0.0;
             lastLogTime = 0.0;
 
+            updateTickCount = 1; //Avoids div by 0 errors
+
             helper.Events.GameLoop.SaveLoaded += StartupTasks;
             helper.Events.GameLoop.DayStarted += DailyUpdate;
             helper.Events.GameLoop.UpdateTicked += OnUpdate;    //Set to quarter-second intervals.
 
             Monitor.Log("ReRegeneration => Initialized", LogLevel.Info);
-
         }
 
         private void StartupTasks(object sender, SaveLoadedEventArgs e)
@@ -159,7 +161,8 @@ namespace ReRegeneration
             activeRegenMult = Math.Max(0.0, Math.Min(1.0, myConfig.regenWhileActiveRate));
 
             //Exhaustion penalty
-            exhaustPenalty = 1.0 - Math.Max(0.0, Math.Min(0.99, myConfig.exhuastionPenalty));
+            exhaustCooldownPenalty = Math.Max(0.0, Math.Min(0.99, myConfig.exhuastionPenalty));
+            exhaustRegenPenalty = 1.0 - exhaustRegenPenalty;
 
             //End exhaustion at?
             endExhaustion = Math.Max(0.0, Math.Min(1.0, myConfig.endExhaustionAt));
@@ -231,54 +234,7 @@ namespace ReRegeneration
             {
                 stamRegenVal *= (0.01 * maxStamRegenAmount);
                 healthRegenVal *= (0.01 * maxHealthRegenAmount);
-
-                /*
-                int maxStamNow = myPlayer.maxStamina;
-                int maxHealthNow = myPlayer.maxHealth;
-
-                //Only (re)calculate if max stamina changed or first time.
-                if (lastMaxStamina < maxStamNow)
-                {
-                    //stamRegenVal = myConfig.staminaRegenPerSecond;
-
-                    //Turn into a percentage
-                    stamRegenVal *= 0.01;
-
-                    //Calculate according to current max stamina passive regen ceiling, which scales w/ actual max stamina
-                    stamRegenVal *= maxStamRegenAmount;
-
-                    //Record the last seen max stamina
-                    lastMaxStamina = maxStamNow;
-                }
-
-                //Only (re)calculate if max health changed or first time.
-                if (lastMaxHealth < maxHealthNow)
-                {
-                    //healthRegenVal = myConfig.healthRegenPerSecond;
-
-                    //Turn into a percentage
-                    healthRegenVal *= 0.01;
-
-                    //Calculate according to current max health passive regen ceiling, which scales w/ actual max health
-                    healthRegenVal *= maxHealthRegenAmount;
-
-                    //Turn into a length of time in seconds.
-                    //if (healthRegenVal != 0) healthRegenVal = 1 / healthRegenVal;
-
-                    //Record the last seen max health
-                    lastMaxHealth = maxHealthNow;
-                }
-                */
             }
-
-            //else
-            //{
-            //    //if (myConfig.healthRegenPerSecond != 0) healthRegenVal = 1 / myConfig.healthRegenPerSecond;
-            //    //else healthRegenVal = 0;
-            //    healthRegenVal = myConfig.healthRegenPerSecond;
-            //
-            //    stamRegenVal = myConfig.staminaRegenPerSecond;
-            //}
 
         }
 
@@ -353,7 +309,7 @@ namespace ReRegeneration
         private void OnUpdate(object sender, UpdateTickedEventArgs e)
         {
             //All of this requires that the game be loaded, the player is set, and this be a quarter-second tick.
-            if (!Game1.hasLoadedGame || myPlayer == null || !e.IsMultipleOf(updateTickCount)) return;
+            if (!e.IsMultipleOf(updateTickCount) || !Game1.hasLoadedGame || myPlayer == null) return;
 
             //Make sure we know exactly how much time has elapsed
             currentTime = Game1.currentGameTime.TotalGameTime.TotalSeconds;
@@ -376,10 +332,10 @@ namespace ReRegeneration
                 //}
 
                 //Do this once.
-                LogIt(StatReport(false, true, false, false), ((currentTime < 30.0) && lastLogTime == 0.0));
+                LogIt(StatReport(false, true, false, false), (currentTime < 30.0) && lastLogTime == 0.0, LogLevel.Trace);
 
-                //Every 15 secs report on all.
-                LogIt(StatReport(true, false, false, false), ((currentTime - lastLogTime) >= 15));
+                //Every 30 secs report on all.
+                LogIt(StatReport(true, false, false, false), (currentTime - lastLogTime) >= 30, LogLevel.Trace);
 
                 double regenProgress;   //Will be set to timeElapsed w/ modifiers
 
@@ -395,24 +351,32 @@ namespace ReRegeneration
                 else if (!myPlayer.movedDuringLastTick() && (stillnessDelayBonus > 0.0)) regenProgress = timeElapsed * stillnessDelayBonus;
                 else regenProgress = timeElapsed;
 
+                LogIt($"\nCooldown 1: Time Elapsed = {timeElapsed}, Run Penalty = {runningDelayMalus}, Still Bonus = {stillnessDelayBonus}, Start Stam Cooldown = {staminaCooldown}, Start Heal Cooldown = {healthCooldown}\nCooldown 2: Time Counted = {regenProgress}, Expected if Running = {timeElapsed*runningDelayMalus}, Expected if Still = {timeElapsed*stillnessDelayBonus}", verbose, LogLevel.Trace);
+
                 //If exhausted, increase delay by the penalty
                 if (myPlayer.exhausted)
                 {
-                    stamDelayMult += exhaustPenalty;
-                    healthDelayMult += exhaustPenalty;
+                    stamDelayMult += exhaustCooldownPenalty;
+                    healthDelayMult += exhaustCooldownPenalty;
                 }
+
+                LogIt($"\nCooldown 3: Exhausted? {myPlayer.exhausted}, Stam Delay Mult = {stamDelayMult}, Heal Delay Mult = {healthDelayMult}, Exhaustion Penalty = {exhaustCooldownPenalty}\nCooldown 4: Expected New Stam Cooldown (Stam Changes) = {myConfig.staminaIdleSeconds*stamDelayMult}, Expected New Stam Cooldown (Stam Static) = {staminaCooldown - regenProgress}", verbose, LogLevel.Trace);
 
                 //Check for player exertion. If player has used stamina since last tick, reset the cooldown.
                 //Decrement how long we've been on stamina cooldown otherwise.
                 if (myPlayer.stamina < lastStamina) { staminaCooldown = myConfig.staminaIdleSeconds * stamDelayMult; }
                 else if (staminaCooldown > 0) { staminaCooldown -= regenProgress; }
+                else staminaCooldown = 0;
 
-                //LogIt(String.Format("Timings:\nTime elpased this check = {0}\nProgress to ending cooldown = {1}\nCooldown time left = {2}", Math.Round(timeElapsed, 2), Math.Round(regenProgress, 2), Math.Round(staminaCooldown, 2)));
+                LogIt($"\nCooldown 5: Stam Cooldown Time = {staminaCooldown}, Has Stamina Changed? {myPlayer.stamina < lastStamina}\nCooldown 6: Expected New Heal Cooldown (Stam Changes) = {myConfig.healthIdleSeconds * healthDelayMult}, Expected New Heal Cooldown (Stam Static) = {healthCooldown - regenProgress}", verbose, LogLevel.Trace);
 
                 //Check for player injury. If player has been injured since last tick, reset the cooldown.
                 //Decrement how long we've been on health cooldown otherwise.
                 if (myPlayer.health < lastHealth) { healthCooldown = myConfig.healthIdleSeconds * healthDelayMult; }
                 else if (healthCooldown > 0) { healthCooldown -= regenProgress; }
+                else healthCooldown = 0;
+
+                LogIt($"\nCooldown 7: Heal Cooldown Time = {healthCooldown}, Has Health Changed? {myPlayer.health < lastHealth}", verbose, LogLevel.Trace);
 
                 /*
                  * Process stamina regeneration. Here are the criteria:
@@ -422,6 +386,8 @@ namespace ReRegeneration
                 */
                 if (stamRegenVal > 0 && myPlayer.stamina < maxStamRegenAmount && staminaCooldown <= 0)
                 {
+                    LogIt($"\nStam Regen 1: Starting Stamina = {myPlayer.stamina}, Max to Regen = {maxStamRegenAmount}, Starting Regen Val = {stamRegenVal}", verbose, LogLevel.Trace);
+
                     //Start building the regen modifier.
                     double stamMult = stamRegenMult;
 
@@ -432,10 +398,12 @@ namespace ReRegeneration
                     if (movePenalty) stamMult *= runRegenRate;
 
                     //If exhausted, reduce by the penalty.
-                    if (myPlayer.exhausted) stamMult *= exhaustPenalty;
+                    if (myPlayer.exhausted) stamMult *= exhaustRegenPenalty;
 
                     //Per-sec val * multiplier * fractions of 1 sec passed
                     myPlayer.stamina += (float)(stamRegenVal * stamMult * intervalMult);
+
+                    LogIt($"\nStam Regen 2: Initial Mod = {stamRegenMult}, Activity Mod = {activeRegenMult}, Running Mod = {runRegenRate}, Exhaustion Mod = {exhaustRegenPenalty}\nStam Regen 3: Final Mod = {stamMult}, Interval Mult = {intervalMult}, Final Stam Regained = {(float)(stamRegenVal*stamMult*intervalMult)}, Final Stamina = {myPlayer.stamina}", verbose, LogLevel.Trace);
 
                     //Final sanity check
                     if (myPlayer.stamina > maxStamRegenAmount) { myPlayer.stamina = maxStamRegenAmount; }
@@ -451,6 +419,7 @@ namespace ReRegeneration
                 */
                 if (healthRegenVal > 0 && myPlayer.health < maxHealthRegenAmount && healthCooldown <= 0)
                 {
+                    LogIt($"\nHeal Regen 1: Starting Health = {myPlayer.health}, Max to Regen = {maxHealthRegenAmount}, Starting Regen Val = {healthRegenVal}", verbose, LogLevel.Trace);
                     //Start building the regen modifier.
                     double healMult = healthRegenMult;
 
@@ -461,7 +430,7 @@ namespace ReRegeneration
                     if (movePenalty) healMult *= runRegenRate;
 
                     //If exhausted, reduce by the penalty.
-                    if (myPlayer.exhausted) healMult *= exhaustPenalty;
+                    if (myPlayer.exhausted) healMult *= exhaustRegenPenalty;
 
                     /* 
                      * Basically, we want to try to restore health every interval, but we absolutely need a round number
@@ -471,6 +440,8 @@ namespace ReRegeneration
                     */
                     healthAccum += (healthRegenVal * healMult * intervalMult); //Per-sec val * multiplier * fractions of 1 sec passed
 
+                    LogIt($"\nHeal Regen 2: Initial Mod = {healthRegenMult}, Activity Mod = {activeRegenMult}, Running Mod = {runRegenRate}, Exhaustion Mod = {exhaustRegenPenalty}\nHeal Regen 3: Final Mod = {healMult}, Interval Mult = {intervalMult}\nHeal Regen 4: Health Accumulated Now = {(float)(healthRegenVal*healMult*intervalMult)}, Total Health Accumulated = {healthAccum}, Enough Accumulated? {healthAccum >= 1}", verbose, LogLevel.Trace);
+
                     //If we've accumulated 1 or more health, apply the whole number value and recalc the accumulation accordingly.
                     if (healthAccum >= 1)
                     {
@@ -479,6 +450,8 @@ namespace ReRegeneration
                         myPlayer.health += (int)healthAccum;  //Apply whole number value
                         healthAccum = rmndr;                  //Accumulate remainder
                     }
+
+                    LogIt($"\nHeal Regen 5: Modified Accumulator = {healthAccum}, Final Health = {myPlayer.health}", verbose, LogLevel.Trace);
 
                     //If we have achieved a round positive number accumulated, apply it and reset the accumulation.
                     //This probably shouldn't ever really happen because of the above, but it's a fallback just in case...
@@ -494,15 +467,19 @@ namespace ReRegeneration
                     //healthCooldown = 1.0;
                 }
 
+                LogIt($"\nExhaustion 1: Exhausted? {myPlayer.exhausted}, Can End Exhaustion? {(endExhaustion > 0.0)}, Should End Exhaustion? {(myPlayer.stamina / maxStamRegenAmount) > endExhaustion}", verbose, LogLevel.Trace);
+
                 //Determine whether to end exhausted status.
                 if (myPlayer.exhausted && endExhaustion > 0.0 && (myPlayer.stamina / maxStamRegenAmount) > endExhaustion) myPlayer.exhausted.Value = false;
+
+                LogIt($"\nExhaustion 1: Still Exhausted? {myPlayer.exhausted}", verbose, LogLevel.Trace);
 
                 // Updated stored health/stamina values.
                 lastHealth = myPlayer.health;
                 lastStamina = myPlayer.stamina;
 
-                //Every second give health/stam update.
-                if (e.IsMultipleOf(60)) LogIt(StatReport(false, false, true, true), ((currentTime - lastLogTime) >= 1));
+                //Every 10 seconds give health/stam update.
+                LogIt(StatReport(false, false, true, true), (currentTime - lastLogTime) >= 10, LogLevel.Trace);
             }
         }
     }
