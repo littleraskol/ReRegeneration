@@ -7,5 +7,5 @@
   "MinimumApiVersion": "3.0.0",
   "PerSaveConfigs": false,
   "EntryDll": "ReRegeneration.dll",
-  "UpdateKeys": [ "Chucklefish:4465" ]
+  "UpdateKeys": [ "Chucklefish:4465", "Nexus:6837" ]
 }
