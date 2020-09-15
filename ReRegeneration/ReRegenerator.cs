@@ -7,60 +7,6 @@ using Microsoft.Xna.Framework;
 
 namespace ReRegeneration
 {
-
-    class ModConfig
-    {
-        public Double staminaRegenPerSecond { get; set; } = 1.0;
-        public Int32 staminaIdleSeconds { get; set; } = 5;
-        public Double maxStaminaRatioToRegen { get; set; } = 0.8;
-        public Double scaleStaminaRegenRateTo { get; set; } = 0.5;
-        public Double scaleStaminaRegenDelayTo { get; set; } = 0.5;
-
-        public Double healthRegenPerSecond { get; set; } = 0.1;
-        public Int32 healthIdleSeconds { get; set; } = 10;
-        public Double maxHealthRatioToRegen { get; set; } = 0.5;
-        public Double scaleHealthRegenRateTo { get; set; } = 0.75;
-        public Double scaleHealthRegenDelayTo { get; set; } = 0.75;
-
-        public Boolean percentageMode { get; set; } = false;
-        public Double regenWhileActiveRate { get; set; } = 0.8;
-        public Double regenWhileRunningRate { get; set; } = 0.2;
-        public Double endExhaustionAt { get; set; } = 0.25;
-        public Double exhuastionPenalty { get; set; } = 0.9;
-        public Double shortenDelayWhenStillBy { get; set; } = 0.5;
-        public Double lengthenDelayWhenRunningBy { get; set; } = 0.5;
-
-        public Double timeInterval { get; set; } = 0.25;
-        public Boolean verboseMode { get; set; } = false;
-
-
-        //public ModConfig()
-        //{
-        //    this.staminaRegenPerSecond = 1.0;
-        //    this.staminaIdleSeconds = 10;
-        //    this.maxStaminaRatioToRegen = 0.8;
-        //    this.scaleStaminaRegenRateTo = 0.5;
-        //    this.scaleStaminaRegenDelayTo = 0.5;
-        //
-        //    this.healthRegenPerSecond = 0.1;
-        //    this.healthIdleSeconds = 15;
-        //    this.maxHealthRatioToRegen = 0.8;
-        //    this.scaleHealthRegenRateTo = 0.75;
-        //    this.scaleHealthRegenDelayTo = 0.75;
-        //
-        //    this.percentageMode = false;
-        //    this.regenWhileActiveRate = 0.8;
-        //    this.regenWhileRunningRate = 0.2;
-        //    this.exhuastionPenalty = 0.25;
-        //    this.endExhaustionAt = 0.9;
-        //    this.shortenDelayWhenStillBy = 0.5;
-        //    this.lengthenDelayWhenRunningBy = 0.5;
-        //
-        //    this.timeInterval = 0.25;
-        //    this.verboseMode = false;
-        //}
-    }
-
     class ReRegenerator : Mod
     {
         //Stamina values
@@ -68,6 +14,7 @@ namespace ReRegeneration
         double lastStamina;                     //Last recorded player stamina value.
         //double lastMaxStamina;                  //Last recorded max stamina value.
         double staminaCooldown;                 //How long to wait before beginning stamina regen.
+        int staminaDelay;                       //Time from exertion to regen
         double maxStamRatio;                    //Percent of max stam to regen to.
         float maxStamRegenAmount;               //Actual max stamina value to regen.
         float playerStamNow;                    //Holds current value, for validation.
@@ -80,6 +27,7 @@ namespace ReRegeneration
         //int lastMaxHealth;                      //Last recorded max health value.
         double healthAccum;                     //Accumulated health regenerated while running.
         double healthCooldown;                  //How long to wait before beginning health regen.
+        int healthDelay;                        //Time from injury to regen
         double maxHealthRatio;                  //Percent of max health to regen to.
         int maxHealthRegenAmount;               //Actual max health value to regen.
         int playerHealthNow;                    //Holds current value, for validation.
@@ -106,11 +54,11 @@ namespace ReRegeneration
         bool verbose;                           //Whether to log regular diagnostics
         
         Farmer myPlayer;                        //Our player.
-        ModConfig myConfig;                     //Config data.
+        RegenConfig myConfig;                     //Config data.
 
         public override void Entry(IModHelper helper)
         {
-            myConfig = helper.ReadConfig<ModConfig>();
+            myConfig = helper.ReadConfig<RegenConfig>();
 
             //Starting values at extremes which prevent unexpected behavior.
             lastStamina = 9999;
@@ -129,11 +77,54 @@ namespace ReRegeneration
 
             updateTickCount = 1; //Avoids div by 0 errors
 
+            helper.Events.GameLoop.GameLaunched += OnGameLaunched;
             helper.Events.GameLoop.SaveLoaded += StartupTasks;
             helper.Events.GameLoop.DayStarted += DailyUpdate;
             helper.Events.GameLoop.UpdateTicked += OnUpdate;    //Set to quarter-second intervals.
 
             Monitor.Log("ReRegeneration => Initialized", LogLevel.Info);
+        }
+
+        private void OnGameLaunched(object sender, GameLaunchedEventArgs e)
+        {
+            TryLoadingGMCM();
+        }
+
+        private void TryLoadingGMCM()
+        {
+            //See if we can find GMCM, quit if not.
+            var api = Helper.ModRegistry.GetApi<GenericModConfigMenu.GenericModConfigMenuAPI>("spacechase0.GenericModConfigMenu");
+
+            if (api == null)
+            {
+                Monitor.Log("Unable to load GMCM API.", LogLevel.Info);
+                return;
+            }
+
+            api.RegisterModConfig(ModManifest, () => myConfig = new RegenConfig(), () => Helper.WriteConfig(myConfig));
+
+            //Basic Values
+            api.RegisterLabel(ModManifest, "Basic Configuration", "Core settings for stamina and health regeneration.");
+            api.RegisterClampedOption(ModManifest, "Stamina Regen/Sec", "How much stamina to regenerate passively per second. Use config file to enter values greater than 10.", () => (float)myConfig.staminaRegenPerSecond, (float val) => myConfig.staminaRegenPerSecond = (double)val, 0, 10);
+            api.RegisterClampedOption(ModManifest, "Stamina Idle Time", "How long to wait, in seconds, after an exertion to regen stamina. Use config file to enter values greater than 60.", () => myConfig.staminaIdleSeconds, (int val) => myConfig.staminaIdleSeconds = val, 1, 60);
+            api.RegisterClampedOption(ModManifest, "Health Regen/Sec", "How much health to regenerate passively per second. Use config file to enter values greater than 10.", () => (float)myConfig.healthRegenPerSecond, (float val) => myConfig.healthRegenPerSecond = (double)val, 0, 10);
+            api.RegisterClampedOption(ModManifest, "Health Idle Time", "How long to wait, in seconds, after an injury to regen health. Use config file to enter values greater than 60.", () => myConfig.healthIdleSeconds, (int val) => myConfig.healthIdleSeconds = val, 1, 60);
+
+            //Advanced Values
+            api.RegisterLabel(ModManifest, "Advanced Configuration", "More complex settings. Consult the readme to understand these.");
+            api.RegisterSimpleOption(ModManifest, "Percentage Mode", "Whether to treat the regen values as percentages of max stamina/health. See readme for more details.", () => myConfig.percentageMode, (bool val) => myConfig.percentageMode = val);
+            api.RegisterSimpleOption(ModManifest, "Max Stamina Ratio", "Fraction of player's maximum stamina that can be passively regenerated, where e.g. 0.4 is 40% (enter a value between 0.01 and 1.0).", () => (float)myConfig.maxStaminaRatioToRegen, (float val) => myConfig.maxStaminaRatioToRegen = val);
+            api.RegisterSimpleOption(ModManifest, "Stamina Regen Scaling Rate", "See readme for an explanation of this entry (enter a value between 0.0 and 1.0).", () => (float)myConfig.scaleStaminaRegenRateTo, (float val) => myConfig.scaleStaminaRegenRateTo = val);
+            api.RegisterSimpleOption(ModManifest, "Stamina Delay Scaling Rate", "See readme for an explanation of this entry (enter a value higher than 0.0).", () => (float)myConfig.scaleStaminaRegenDelayTo, (float val) => myConfig.scaleStaminaRegenDelayTo = val);
+            api.RegisterSimpleOption(ModManifest, "Max Health Ratio", "Fraction of player's maximum health that can be passively regenerated, where e.g. 0.4 is 40% (enter a value between 0.01 and 1.0).", () => (float)myConfig.maxHealthRatioToRegen, (float val) => myConfig.maxHealthRatioToRegen = val);
+            api.RegisterSimpleOption(ModManifest, "Health Regen Scaling Rate", "See readme for an explanation of this entry (enter a value between 0.0 and 1.0).", () => (float)myConfig.scaleHealthRegenRateTo, (float val) => myConfig.scaleHealthRegenRateTo = val);
+            api.RegisterSimpleOption(ModManifest, "Health Delay Scaling Rate", "See readme for an explanation of this entry (enter a value higher than 0.0).", () => (float)myConfig.scaleHealthRegenDelayTo, (float val) => myConfig.scaleHealthRegenDelayTo = val);
+            api.RegisterSimpleOption(ModManifest, "Active Regen Rate", "Rate of regeneration while fishing or riding a horse. See readme for an more info. (Enter a value between 0.0 and 1.0.)", () => (float)myConfig.regenWhileActiveRate, (float val) => myConfig.regenWhileActiveRate = val);
+            api.RegisterSimpleOption(ModManifest, "Running Regen Rate", "Rate of regeneration while running. See readme for an more info. (Enter a value between 0.0 and 1.0.)", () => (float)myConfig.regenWhileRunningRate, (float val) => myConfig.regenWhileRunningRate = val);
+            api.RegisterSimpleOption(ModManifest, "Exhaustion Penalty", "Fractional value by which the amount of regeneration is decreased and the duration of the idle delay is increased while the player is exhausted. See readme for an more info. (Enter a value between 0.0 and 1.0.)", () => (float)myConfig.exhuastionPenalty, (float val) => myConfig.exhuastionPenalty = val);
+            api.RegisterSimpleOption(ModManifest, "End Exhaustion At...", "At what fraction of max stamina should the exaustion penalty be removed. Enter 0 to disable this feature. See readme for an more info. (Enter a value between 0.0 and 1.0.)", () => (float)myConfig.endExhaustionAt, (float val) => myConfig.endExhaustionAt = val);
+            api.RegisterSimpleOption(ModManifest, "Delay Stillness Bonus", "Shortens the regen delay while standing still by the specified fractional multiplier. Enter 0 to disable this feature. See readme for an more info.", () => (float)myConfig.shortenDelayWhenStillBy, (float val) => myConfig.shortenDelayWhenStillBy = val);
+            api.RegisterSimpleOption(ModManifest, "Delay Running Penalty", "Lengthens the regen delay while running by the specified fractional value. Enter 0 to disable this feature. See readme for an more info. (Enter a value between 0.0 and 1.0.)", () => (float)myConfig.shortenDelayWhenStillBy, (float val) => myConfig.shortenDelayWhenStillBy = val);
         }
 
         private void StartupTasks(object sender, SaveLoadedEventArgs e)
@@ -170,6 +161,10 @@ namespace ReRegeneration
             //Delay bonuses and penalties
             stillnessDelayBonus = 1.0 + Math.Max(0.0, myConfig.shortenDelayWhenStillBy);
             runningDelayMalus = 1.0 - Math.Max(0.0, Math.Min(1.0, myConfig.lengthenDelayWhenRunningBy));
+
+            //Delay/idle before regen
+            staminaDelay = Math.Max(0, myConfig.staminaIdleSeconds);
+            healthDelay = Math.Max(0, myConfig.healthIdleSeconds);
         }
 
         private void DailyUpdate(object sender, DayStartedEventArgs e)
@@ -360,19 +355,19 @@ namespace ReRegeneration
                     healthDelayMult += exhaustCooldownPenalty;
                 }
 
-                LogIt($"\nCooldown 3: Exhausted? {myPlayer.exhausted}, Stam Delay Mult = {stamDelayMult}, Heal Delay Mult = {healthDelayMult}, Exhaustion Penalty = {exhaustCooldownPenalty}\nCooldown 4: Expected New Stam Cooldown (Stam Changes) = {myConfig.staminaIdleSeconds*stamDelayMult}, Expected New Stam Cooldown (Stam Static) = {staminaCooldown - regenProgress}", verbose, LogLevel.Trace);
+                LogIt($"\nCooldown 3: Exhausted? {myPlayer.exhausted}, Stam Delay Mult = {stamDelayMult}, Heal Delay Mult = {healthDelayMult}, Exhaustion Penalty = {exhaustCooldownPenalty}\nCooldown 4: Expected New Stam Cooldown (Stam Changes) = {staminaDelay*stamDelayMult}, Expected New Stam Cooldown (Stam Static) = {staminaCooldown - regenProgress}", verbose, LogLevel.Trace);
 
                 //Check for player exertion. If player has used stamina since last tick, reset the cooldown.
                 //Decrement how long we've been on stamina cooldown otherwise.
-                if (myPlayer.stamina < lastStamina) { staminaCooldown = myConfig.staminaIdleSeconds * stamDelayMult; }
+                if (myPlayer.stamina < lastStamina) { staminaCooldown = staminaDelay * stamDelayMult; }
                 else if (staminaCooldown > 0) { staminaCooldown -= regenProgress; }
                 else staminaCooldown = 0;
 
-                LogIt($"\nCooldown 5: Stam Cooldown Time = {staminaCooldown}, Has Stamina Changed? {myPlayer.stamina < lastStamina}\nCooldown 6: Expected New Heal Cooldown (Stam Changes) = {myConfig.healthIdleSeconds * healthDelayMult}, Expected New Heal Cooldown (Stam Static) = {healthCooldown - regenProgress}", verbose, LogLevel.Trace);
+                LogIt($"\nCooldown 5: Stam Cooldown Time = {staminaCooldown}, Has Stamina Changed? {myPlayer.stamina < lastStamina}\nCooldown 6: Expected New Heal Cooldown (Stam Changes) = {healthDelay*healthDelayMult}, Expected New Heal Cooldown (Stam Static) = {healthCooldown - regenProgress}", verbose, LogLevel.Trace);
 
                 //Check for player injury. If player has been injured since last tick, reset the cooldown.
                 //Decrement how long we've been on health cooldown otherwise.
-                if (myPlayer.health < lastHealth) { healthCooldown = myConfig.healthIdleSeconds * healthDelayMult; }
+                if (myPlayer.health < lastHealth) { healthCooldown = healthDelay * healthDelayMult; }
                 else if (healthCooldown > 0) { healthCooldown -= regenProgress; }
                 else healthCooldown = 0;
 
