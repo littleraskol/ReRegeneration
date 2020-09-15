@@ -58,6 +58,10 @@ verboseMode: By default it is "false" and controls whether to output debug data 
 
 2. CHANGELOG
 
+v2.1.0 (09/16/20)
+-Settings can now be changed in game using Generic Mod Config Menu.
+-Some under the hood changes.
+
 v2.0.0 (09/13/20)
 -Updated to most recent SMAPI and SDV versions.
 -Bunch of new options.
