@@ -10,7 +10,7 @@ RegenPerSecond: The amount of stamina/health to be passively regenerated per sec
 
 IdleSeconds: How long to wait since the last exertion/injury before regeneration begins. This is referred to as the "regen delay" or "cooldown."
 
-MaxRegen: Max percentage value of total stamina/health that passive regen can reach. Set to 1 to be able to passively regenerate all stamina or health; any value higher than 1 will be treated as 1. Note that the lowest possible value for this is 0.01 (or 1%), anything lower will be treated as that. IMPORTANT: Every mod setting based on the player's maximum stamina or health will scale to the value derived from this; in other words, "max stamina/health" in these definitions really means the actual in-game player value multiplied by this value.
+maxRatioToRegen: Max percentage value of total stamina/health that passive regen can reach. Set to 1 to be able to passively regenerate all stamina or health; any value higher than 1 will be treated as 1. Note that the lowest possible value for this is 0.01 (or 1%), anything lower will be treated as that. IMPORTANT: Every mod setting based on the player's maximum stamina or health will scale to the value derived from this; in other words, "max stamina/health" in these definitions really means the actual in-game player value multiplied by this value.
 
 scaleRegenRateTo: Scale the rate of stamina/health regen to be slower when lower. Specifically, as the value approaches 0, the regen rate gets closer being multiplied by this setting's value (e.g. at 0.5, cut in half). Another way of looking at this is that you will get (1 minus this setting's value) times less stamina/health regen (e.g. at 0.25, 1 - 0.25 = 0.75, or 75% less). Setting to 0 will turn this feature off.
 
@@ -20,25 +20,25 @@ The default values (for stamina and then health) are:
 
   "staminaRegenPerSecond": 1.0,
   "staminaIdleSeconds": 5,
-  "maxStaminaRegen": 0.8,
-  "scaleStaminaRegenRateTo": 0.85,
-  "scaleStaminaRegenDelayTo": 0.15,
+  "maxStaminaRatioToRegen": 0.8,
+  "scaleStaminaRegenRateTo": 0.8,
+  "scaleStaminaRegenDelayTo": 0.2,
 
-Stamina will passively recover by 1 point every second after waiting 5 seconds. Passive regen will reach a maximum of 80% of max stamina, and regen rate and delay scale with current stamina value to approach 15% less/longer at 0 stamina.
+Stamina will passively recover by 1 point every second after waiting 5 seconds. Passive regen will reach a maximum of 80% of max stamina, and regen rate and delay scale with current stamina value to approach 20% less/longer at 0 stamina.
 
   "healthRegenPerSecond": 0.5,
   "healthIdleSeconds": 10,
-  "maxHealthRegen": 0.6,
-  "scaleHealthRegenRateTo": 0.7,
-  "scaleHealthRegenDelayTo": 0.3,
+  "maxHealthRatioToRegen": 0.6,
+  "scaleHealthRegenRateTo": 0.6,
+  "scaleHealthRegenDelayTo": 0.4,
 
-Health will passively recover by 1 point every 2 seconds after waiting 10 seconds. Passive regen will reach a maximum of 60% of max health, and regen rate and delay scale with current health value to approach 30% less/longer at 0 health.
+Health will passively recover by 1 point every 2 seconds after waiting 10 seconds. Passive regen will reach a maximum of 60% of max health, and regen rate and delay scale with current health value to approach 40% less/longer at 0 health.
 
 There are other options that modify how the regen system works:
 
 percentageMode: Whether the "RegenPerSecond" values will be interpreted as percentages of the maximum value, so that e.g. a value of "1" will not regenerate 1 point of stamina per second but rather 1% of the player's maximum stamina. This allows the regeneration rate to scale with higher levels of health and stamina. So, at the default stamina regen value of staminaRegenPerSecond = 1, at the start of the game 2.7 points of stamina will regenerate per second (1% of the starting value of 270 stamina and assuming maxStaminaRegen is set to 1). Note that if you do enable percentage mode, I'd advise you to change the default value of "staminaRegenPerSecond" to 0.4 because this will result in a starting regen rate of 1.08 points per second, which is close to the default in normal mode. Health starts at 100 points, so there's no discrepancy there. (Default = false)
 
-regenWhileActiveRate: A 0 to 1 fractional value to multiply regen rates by while fishing or riding a horse. Default = 0.9, meaning 10% less regeneration. Set to 1 to ignore this feature. Set to 0 to turn regeneration off during these activities.
+regenWhileActiveRate: A 0 to 1 fractional value to multiply regen rates by while fishing or riding a horse. Default = 0.8, meaning 20% less regeneration. Set to 1 to ignore this feature. Set to 0 to turn regeneration off during these activities.
 
 regenWhileRunningRate: A 0 to 1 fractional value to multiply regen rates by while running. Default = 0.5, meaning 50% less regeneration. Set to 1 to ignore this feature. Set to 0 to turn regeneration off while running.
 
@@ -61,6 +61,7 @@ verboseMode: By default it is "false" and controls whether to output debug data 
 v2.1.0 (09/16/20)
 -Settings can now be changed in game using Generic Mod Config Menu.
 -Some under the hood changes.
+-Slightly different default config values.
 
 v2.0.0 (09/13/20)
 -Updated to most recent SMAPI and SDV versions.
@@ -83,6 +84,7 @@ v0.9.0b (01/21/17)
 
 3. KNOWN ISSUES
 
+-In the mod config menu, there might be situations where numbers show as being one less than expected (e.g., 89 instead of 90). This is due to some kind of floating point conversion issue and is merely cosmetic, probably.
 -During cutscenes, there may be brief windows of time when the conditions of a cutscene enable regeneration to briefly work. This seems to be because cutscenes sometimes briefly allow the game clock to advance time.
 -It might be possible to "cheese" the running rate regen for health due to its typically long check time. You're on your honor!
 
