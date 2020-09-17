@@ -1,7 +1,7 @@
 {
   "Name": "ReRegeneration",
   "Authour": "littleraskol",
-  "Version": "2.0.0",
+  "Version": "2.1.0",
   "Description": "Provides configurable health and stamina regeneration under a variety of conditions.",
   "UniqueID": "lrsk_sdvm_rerg.0925160827",
   "MinimumApiVersion": "3.0.0",
